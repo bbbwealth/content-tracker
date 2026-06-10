@@ -105,6 +105,7 @@ const SEED = {
 };
 const PIPE_COLS = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
 const KEY = "bbb-content-os-v1";
+const API = "/api/data";
 
 /* ── atoms ── */
 const Pill = ({ children, bg, fg, style }) => (<span style={{ background:bg, color:fg, padding:"3px 9px", borderRadius:999, fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:".2px", ...style }}>{children}</span>);
@@ -193,18 +194,57 @@ function App() {
   const [modal, setModal] = useState(null);
   const [drag, setDrag] = useState(null);
   const [saved, setSaved] = useState("");
-  const savedTimer = useRef();
+  const saveTimer = useRef();
+  const dirtyRef = useRef(false);
+  const loadedAtRef = useRef(0);
+  const busyRef = useRef(false);
+  useEffect(() => { busyRef.current = !!modal; }, [modal]);
 
   useEffect(() => {
-    try { const raw = localStorage.getItem(KEY); if (raw) { setData(normalize(JSON.parse(raw))); return; } } catch(e) {}
-    setData(SEED); try { localStorage.setItem(KEY, JSON.stringify(SEED)); } catch(e) {}
+    let off = false;
+    (async () => {
+      try {
+        const res = await fetch(API, { cache: "no-store" });
+        if (!res.ok) throw new Error("status " + res.status);
+        const remote = await res.json();
+        if (remote && remote.pipeline) { if (!off) { setData(normalize(remote)); loadedAtRef.current = remote.updatedAt || 0; setSaved("Synced"); } return; }
+        const seeded = { ...SEED, updatedAt: Date.now() };
+        await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(seeded) });
+        if (!off) { setData(seeded); loadedAtRef.current = seeded.updatedAt; setSaved("Synced"); }
+      } catch (e) {
+        try { const raw = localStorage.getItem(KEY); if (raw) { if (!off) { setData(normalize(JSON.parse(raw))); setSaved("Offline — local only"); } return; } } catch(_) {}
+        if (!off) { setData(SEED); setSaved("Offline — local only"); }
+      }
+    })();
+    return () => { off = true; };
   }, []);
 
   const persist = (next) => {
-    setData(next);
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch(e) {}
-    setSaved("Saved"); clearTimeout(savedTimer.current); savedTimer.current = setTimeout(()=>setSaved(""),1400);
+    next = { ...next, updatedAt: Date.now() };
+    setData(next); dirtyRef.current = true; setSaved("Saving…");
+    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch(_) {}
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next) });
+        if (!res.ok) throw new Error();
+        dirtyRef.current = false; loadedAtRef.current = next.updatedAt; setSaved("Synced");
+      } catch (e) { setSaved("Offline — saved locally"); }
+    }, 600);
   };
+
+  useEffect(() => {
+    const t = setInterval(async () => {
+      if (dirtyRef.current || busyRef.current) return;
+      try {
+        const res = await fetch(API, { cache: "no-store" });
+        if (!res.ok) return;
+        const remote = await res.json();
+        if (remote && remote.updatedAt && remote.updatedAt > loadedAtRef.current) { setData(normalize(remote)); loadedAtRef.current = remote.updatedAt; }
+      } catch (e) {}
+    }, 20000);
+    return () => clearInterval(t);
+  }, []);
 
   if (!data) return <Splash />;
   const L = data.lists;
@@ -280,7 +320,7 @@ function App() {
           <button key={n.id} onClick={()=>setTab(n.id)} style={{ border:"none", cursor:"pointer", background:"transparent", color:on?"#fff":"#8696B4", padding:"12px 14px", fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:7, borderBottom:`3px solid ${on?C.yellow:"transparent"}` }}><Icon size={16} />{n.label}</button>
         ); })}
         <div style={{ flex:1 }} />
-        {saved && <div style={{ alignSelf:"center", color:C.yellow, fontSize:12, fontWeight:600, paddingRight:8 }}>● {saved}</div>}
+        {saved && <div style={{ alignSelf:"center", color: saved.indexOf("Offline")>=0 ? "#FF8E8E" : (saved.indexOf("Synced")>=0 ? "#7CE0A3" : C.yellow), fontSize:12, fontWeight:600, paddingRight:8 }}>● {saved}</div>}
       </div>
 
       <div style={{ padding:20, maxHeight:"72vh", overflowY:"auto" }}>
