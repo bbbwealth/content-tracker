@@ -32,7 +32,7 @@ const SUPABASE_URL = "https://pytksdxbclleipikuxtj.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_j2LuiGkw-bFOdL2RaGSS4w_qci2C6mh";
 
 const SB_READY = SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY.length > 20;
-const supabase = SB_READY ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const sb = SB_READY ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 const ROW_ID = "main"; // single shared document row in the app_state table
 
 /* ── icons (inline svg) ── */
@@ -232,8 +232,8 @@ function App() {
   // ── auth: track who is signed in ──
   useEffect(() => {
     if (!SB_READY) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -242,17 +242,17 @@ function App() {
     if (!SB_READY || !session) { setData(null); return; }
     let channel; let cancelled = false;
     (async () => {
-      const { data: row } = await supabase.from("app_state").select("data").eq("id", ROW_ID).maybeSingle();
+      const { data: row } = await sb.from("app_state").select("data").eq("id", ROW_ID).maybeSingle();
       if (cancelled) return;
       if (row && row.data) {
         setData(normalize(row.data));
       } else {
         // first ever load — seed the shared document
         lastPush.current = JSON.stringify(SEED);
-        await supabase.from("app_state").upsert({ id: ROW_ID, data: SEED });
+        await sb.from("app_state").upsert({ id: ROW_ID, data: SEED });
         setData(SEED);
       }
-      channel = supabase
+      channel = sb
         .channel("app_state_live")
         .on("postgres_changes",
           { event: "*", schema: "public", table: "app_state", filter: `id=eq.${ROW_ID}` },
@@ -265,21 +265,21 @@ function App() {
           })
         .subscribe();
     })();
-    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+    return () => { cancelled = true; if (channel) sb.removeChannel(channel); };
   }, [session]);
 
   const persist = async (next) => {
     setData(next); // optimistic — update the screen immediately
     lastPush.current = JSON.stringify(next);
     setSaved("Saving…"); clearTimeout(savedTimer.current);
-    const { error } = await supabase
+    const { error } = await sb
       .from("app_state")
       .upsert({ id: ROW_ID, data: next, updated_at: new Date().toISOString() });
     setSaved(error ? "Save failed — check connection" : "Saved");
     savedTimer.current = setTimeout(() => setSaved(""), 1600);
   };
 
-  const logout = () => { if (supabase) supabase.auth.signOut(); };
+  const logout = () => { if (sb) sb.auth.signOut(); };
 
   if (!SB_READY) return <ConfigNeeded />;
   if (session === undefined) return <Splash />;
@@ -338,7 +338,7 @@ function App() {
   // ── admin: enrol a new team member (creates their login via the secure Edge Function) ──
   const enrolUser = async ({ name, email, password, role:newRole }) => {
     try {
-      const { data: s } = await supabase.auth.getSession();
+      const { data: s } = await sb.auth.getSession();
       const token = s.session && s.session.access_token;
       const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-user`, {
         method: "POST",
@@ -845,7 +845,7 @@ function Login() {
   const submit = async (e) => {
     e.preventDefault();
     setErr(""); setBusy(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password: pw });
     setBusy(false);
     if (error) setErr(error.message || "Could not sign in.");
   };
