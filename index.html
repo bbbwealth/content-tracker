@@ -8,7 +8,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   * { box-sizing: border-box; }
   body { margin: 0; background: #E9ECF3; font-family: 'Hanken Grotesk', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
@@ -22,6 +23,17 @@
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useMemo, useRef } = React;
+
+/* ─────────────────────────────────────────────────────────────
+   SUPABASE CONFIG  ← paste your two values between the quotes
+   (Get them in Supabase → Project Settings → API)
+   ───────────────────────────────────────────────────────────── */
+const SUPABASE_URL = "https://pytksdxbclleipikuxtj.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_j2LuiGkw-bFOdL2RaGSS4w_qci2C6mh";
+
+const SB_READY = SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY.length > 20;
+const supabase = SB_READY ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const ROW_ID = "main"; // single shared document row in the app_state table
 
 /* ── icons (inline svg) ── */
 const Svg = ({ size = 16, color = "currentColor", style, children, fill = "none" }) => (
@@ -44,6 +56,9 @@ const GripVertical = ({ size = 14, color = "#C2CAD8" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none"><circle cx="9" cy="5" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="9" cy="19" r="1.4"/><circle cx="15" cy="5" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="15" cy="19" r="1.4"/></svg>
 );
 const Activity = (p) => <Svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></Svg>;
+const ClipboardList = (p) => <Svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M8 11h8"/><path d="M8 15h6"/></Svg>;
+const Shield = (p) => <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></Svg>;
+const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -88,6 +103,12 @@ const SEED = {
     { code:"P-002", partner:"Luno Malaysia", ctype:"Campaign (One-Off Paid)", brand:"Madwithmoney", talent:"Madeleine", deliverables:"2 Reels (Manglish + Mandarin DCA)", fee:15000, status:"Delivered", briefDate:"2026-05-10", contentDue:"2026-05-25", goLive:"2026-05-30", contract:"Done", invoice:"Done", pic:"Serene", notes:"SST line items on invoice" },
     { code:"P-003", partner:"FSMOne", ctype:"Affiliate (Performance-Based)", brand:"BBBwealth", talent:"Hubert", deliverables:"Bond guidebook lead magnet + webinar", fee:0, status:"Completed", briefDate:"2026-04-01", contentDue:"2026-04-20", goLive:"2026-04-25", contract:"Done", invoice:"N/A", pic:"Hubert", notes:"Referral community campaign" },
   ]),
+  weeklyPlans: seedRows([
+    { week:"2026-06-29", owner:"Hubert", brand:"BBBwealth", type:"Carousel", title:"美联储利率决议解读", platform:"Instagram", targetDate:"2026-07-02", notes:"配合播客同周发", status:"Planned" },
+    { week:"2026-06-29", owner:"Hubert", brand:"BBBwealth", type:"Podcast", title:"讲钱不讲情 — 债券入门", platform:"Spotify", targetDate:"2026-07-04", notes:"女搭档", status:"In Progress" },
+    { week:"2026-06-29", owner:"Serene", brand:"KL Money", type:"Carousel", title:"2026 雪隆区生活成本", platform:"小红书 (RED)", targetDate:"2026-07-03", notes:"用最新数据", status:"Planned" },
+    { week:"2026-06-29", owner:"Madeleine", brand:"Madwithmoney", type:"Reel", title:"RM1000 月供组合实测", platform:"Instagram", targetDate:"2026-07-01", notes:"新手系列 ep.4", status:"Done" },
+  ]),
   lists: {
     brands:["BBBwealth","KL Money","Madwithmoney"],
     types:["Carousel","Reel","Podcast","Article","Story"],
@@ -100,12 +121,12 @@ const SEED = {
     collabStatus:["Pitching","Negotiating","Contract Signed","In Production","Delivered","Invoiced","Paid","Completed","Dropped"],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
+    weeklyStatus:["Planned","In Progress","Done"],
   },
   settings: { weeklyTarget: 4 },
 };
 const PIPE_COLS = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
 const KEY = "bbb-content-os-v1";
-const API = "/api/data";
 
 /* ── atoms ── */
 const Pill = ({ children, bg, fg, style }) => (<span style={{ background:bg, color:fg, padding:"3px 9px", borderRadius:999, fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:".2px", ...style }}>{children}</span>);
@@ -127,6 +148,9 @@ const nowISO = () => new Date().toISOString().slice(0, 10);
 const TODAY = nowISO();
 const dayspan = (a, b) => { if (!a || !b) return null; return (new Date(b) - new Date(a)) / 86400000; };
 const weekBounds = () => { const d = new Date(); const off = (d.getDay() + 6) % 7; const mon = new Date(d); mon.setDate(d.getDate() - off); const sun = new Date(mon); sun.setDate(mon.getDate() + 6); const f = (x) => x.toISOString().slice(0, 10); return [f(mon), f(sun)]; };
+const mondayOf = (d) => { const x = new Date(d); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return x.toISOString().slice(0, 10); };
+const addDaysISO = (iso, n) => { const x = new Date(iso + "T00:00:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+const THIS_MON = mondayOf(new Date());
 const withStamp = (item, status) => { const stamps = { ...(item.stamps || {}) }; if (!stamps[status]) stamps[status] = nowISO(); return { ...item, status, stamps }; };
 const syncCalendar = (calendar, item, status) => {
   const date = item.target || nowISO();
@@ -135,7 +159,7 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = d.weeklyPlans || []; if (!d.lists.weeklyStatus) d.lists.weeklyStatus = ["Planned","In Progress","Done"]; return d; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
     <div style={{ display:"flex", alignItems:"center", marginBottom:16, gap:12 }}>
@@ -172,6 +196,13 @@ const fieldSets = (L) => ({
     { k:"title", l:"Title", t:"text", full:1 }, { k:"status", l:"Status", t:"select", o:L.calStatus },
     { k:"caption", l:"Caption / Notes", t:"textarea", full:1 }, { k:"link", l:"Link", t:"text", full:1 },
   ],
+  weeklyPlans: [
+    { k:"owner", l:"Team Member", t:"select", o:L.team }, { k:"brand", l:"Brand", t:"select", o:L.brands },
+    { k:"type", l:"Content Type", t:"select", o:L.types }, { k:"title", l:"Content Idea / Title", t:"text", full:1 },
+    { k:"platform", l:"Target Platform", t:"select", o:L.platforms }, { k:"targetDate", l:"Target Post Date", t:"date" },
+    { k:"status", l:"Status", t:"select", o:L.weeklyStatus }, { k:"week", l:"Week (Mon)", t:"date" },
+    { k:"notes", l:"Notes / Hook", t:"textarea", full:1 },
+  ],
   collabs: [
     { k:"partner", l:"Partner / Client", t:"text", full:1 },
     { k:"ctype", l:"Collab Type", t:"select", o:L.collabTypes }, { k:"brand", l:"Our Brand", t:"select", o:L.brands },
@@ -187,6 +218,7 @@ const nextCode = (rows, prefix) => { const n = rows.reduce((m,r)=>Math.max(m, pa
 
 /* ── app ── */
 function App() {
+  const [session, setSession] = useState(undefined); // undefined = still checking
   const [data, setData] = useState(null);
   const [tab, setTab] = useState("dashboard");
   const [brandFilter, setBrandFilter] = useState("All");
@@ -194,59 +226,69 @@ function App() {
   const [modal, setModal] = useState(null);
   const [drag, setDrag] = useState(null);
   const [saved, setSaved] = useState("");
-  const saveTimer = useRef();
-  const dirtyRef = useRef(false);
-  const loadedAtRef = useRef(0);
-  const busyRef = useRef(false);
-  useEffect(() => { busyRef.current = !!modal; }, [modal]);
+  const savedTimer = useRef();
+  const lastPush = useRef("");
 
+  // ── auth: track who is signed in ──
   useEffect(() => {
-    let off = false;
-    (async () => {
-      try {
-        const res = await fetch(API, { cache: "no-store" });
-        if (!res.ok) throw new Error("status " + res.status);
-        const remote = await res.json();
-        if (remote && remote.pipeline) { if (!off) { setData(normalize(remote)); loadedAtRef.current = remote.updatedAt || 0; setSaved("Synced"); } return; }
-        const seeded = { ...SEED, updatedAt: Date.now() };
-        await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(seeded) });
-        if (!off) { setData(seeded); loadedAtRef.current = seeded.updatedAt; setSaved("Synced"); }
-      } catch (e) {
-        try { const raw = localStorage.getItem(KEY); if (raw) { if (!off) { setData(normalize(JSON.parse(raw))); setSaved("Offline — local only"); } return; } } catch(_) {}
-        if (!off) { setData(SEED); setSaved("Offline — local only"); }
-      }
-    })();
-    return () => { off = true; };
+    if (!SB_READY) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
-  const persist = (next) => {
-    next = { ...next, updatedAt: Date.now() };
-    setData(next); dirtyRef.current = true; setSaved("Saving…");
-    try { localStorage.setItem(KEY, JSON.stringify(next)); } catch(_) {}
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        const res = await fetch(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(next) });
-        if (!res.ok) throw new Error();
-        dirtyRef.current = false; loadedAtRef.current = next.updatedAt; setSaved("Synced");
-      } catch (e) { setSaved("Offline — saved locally"); }
-    }, 600);
+  // ── once signed in: load the shared doc, then live-sync with the team ──
+  useEffect(() => {
+    if (!SB_READY || !session) { setData(null); return; }
+    let channel; let cancelled = false;
+    (async () => {
+      const { data: row } = await supabase.from("app_state").select("data").eq("id", ROW_ID).maybeSingle();
+      if (cancelled) return;
+      if (row && row.data) {
+        setData(normalize(row.data));
+      } else {
+        // first ever load — seed the shared document
+        lastPush.current = JSON.stringify(SEED);
+        await supabase.from("app_state").upsert({ id: ROW_ID, data: SEED });
+        setData(SEED);
+      }
+      channel = supabase
+        .channel("app_state_live")
+        .on("postgres_changes",
+          { event: "*", schema: "public", table: "app_state", filter: `id=eq.${ROW_ID}` },
+          (payload) => {
+            const incoming = payload.new && payload.new.data;
+            if (!incoming) return;
+            const str = JSON.stringify(incoming);
+            if (str === lastPush.current) return; // ignore the echo of our own save
+            setData(normalize(incoming));
+          })
+        .subscribe();
+    })();
+    return () => { cancelled = true; if (channel) supabase.removeChannel(channel); };
+  }, [session]);
+
+  const persist = async (next) => {
+    setData(next); // optimistic — update the screen immediately
+    lastPush.current = JSON.stringify(next);
+    setSaved("Saving…"); clearTimeout(savedTimer.current);
+    const { error } = await supabase
+      .from("app_state")
+      .upsert({ id: ROW_ID, data: next, updated_at: new Date().toISOString() });
+    setSaved(error ? "Save failed — check connection" : "Saved");
+    savedTimer.current = setTimeout(() => setSaved(""), 1600);
   };
 
-  useEffect(() => {
-    const t = setInterval(async () => {
-      if (dirtyRef.current || busyRef.current) return;
-      try {
-        const res = await fetch(API, { cache: "no-store" });
-        if (!res.ok) return;
-        const remote = await res.json();
-        if (remote && remote.updatedAt && remote.updatedAt > loadedAtRef.current) { setData(normalize(remote)); loadedAtRef.current = remote.updatedAt; }
-      } catch (e) {}
-    }, 20000);
-    return () => clearInterval(t);
-  }, []);
+  const logout = () => { if (supabase) supabase.auth.signOut(); };
 
+  if (!SB_READY) return <ConfigNeeded />;
+  if (session === undefined) return <Splash />;
+  if (!session) return <Login />;
   if (!data) return <Splash />;
+  const currentUser = session.user || {};
+  const role = (currentUser.app_metadata && currentUser.app_metadata.role) || "user";
+  const isAdmin = role === "admin";
+  const myName = (currentUser.user_metadata && currentUser.user_metadata.name) || currentUser.email || "";
   const L = data.lists;
   const matchBrand = (r) => brandFilter === "All" || r.brand === brandFilter;
   const matchQuery = (r) => !query || JSON.stringify(r).toLowerCase().includes(query.toLowerCase());
@@ -258,6 +300,7 @@ function App() {
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
     if (entity==="collabs") blank.status="Pitching";
+    if (entity==="weeklyPlans") { blank.status="Planned"; blank.week=THIS_MON; blank.owner = L.team.includes(myName) ? myName : ""; }
     setModal({ entity, mode:"add", record:blank });
   };
   const openEdit = (entity, record) => setModal({ entity, mode:"edit", record:{ ...record } });
@@ -292,10 +335,30 @@ function App() {
     persist({ ...data, pipeline:rows, ideas });
   };
 
+  // ── admin: enrol a new team member (creates their login via the secure Edge Function) ──
+  const enrolUser = async ({ name, email, password, role:newRole }) => {
+    try {
+      const { data: s } = await supabase.auth.getSession();
+      const token = s.session && s.session.access_token;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-user`, {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "Authorization":`Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
+        body: JSON.stringify({ name, email, password, role: newRole }),
+      });
+      const out = await res.json().catch(()=>({}));
+      if (!res.ok) return { error: out.error || `Failed (${res.status})` };
+      if (name && !data.lists.team.includes(name)) persist({ ...data, lists:{ ...data.lists, team:[...data.lists.team, name] } });
+      return { ok: true };
+    } catch (e) { return { error: String((e && e.message) || e) }; }
+  };
+  const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id?{ ...r, status }:r)) });
+
   const NAV = [
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
-    { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays },
+    { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Weekly Plan", icon:ClipboardList },
+    { id:"calendar", label:"Calendar", icon:CalendarDays },
     { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
+    ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
 
   return (
@@ -313,6 +376,11 @@ function App() {
         <div style={{ display:"flex", gap:6, background:C.navy2, padding:4, borderRadius:10, flexWrap:"wrap" }}>
           {["All", ...L.brands].map((b)=>(<button key={b} onClick={()=>setBrandFilter(b)} style={{ border:"none", cursor:"pointer", borderRadius:7, padding:"6px 11px", fontSize:12, fontWeight:600, background:brandFilter===b?C.yellow:"transparent", color:brandFilter===b?C.navy:"#B9C6DD" }}>{b}</button>))}
         </div>
+        <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+          <span style={{ background:isAdmin?C.yellow:"#2C3F5E", color:isAdmin?C.navy:"#B9C6DD", fontSize:10.5, fontWeight:800, padding:"3px 7px", borderRadius:6, letterSpacing:".3px" }}>{isAdmin?"ADMIN":"MEMBER"}</span>
+          <span title={session.user && session.user.email} style={{ color:"#9FB0CC", fontSize:11.5, fontWeight:600, maxWidth:130, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{session.user && session.user.email}</span>
+          <button onClick={logout} style={{ border:"1px solid #2C3F5E", background:C.navy2, color:"#B9C6DD", borderRadius:8, padding:"6px 11px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Log out</button>
+        </div>
       </div>
 
       <div style={{ display:"flex", gap:2, padding:"0 14px", background:C.navy, borderTop:"1px solid #243653", flexWrap:"wrap" }}>
@@ -320,17 +388,19 @@ function App() {
           <button key={n.id} onClick={()=>setTab(n.id)} style={{ border:"none", cursor:"pointer", background:"transparent", color:on?"#fff":"#8696B4", padding:"12px 14px", fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:7, borderBottom:`3px solid ${on?C.yellow:"transparent"}` }}><Icon size={16} />{n.label}</button>
         ); })}
         <div style={{ flex:1 }} />
-        {saved && <div style={{ alignSelf:"center", color: saved.indexOf("Offline")>=0 ? "#FF8E8E" : (saved.indexOf("Synced")>=0 ? "#7CE0A3" : C.yellow), fontSize:12, fontWeight:600, paddingRight:8 }}>● {saved}</div>}
+        {saved && <div style={{ alignSelf:"center", color:C.yellow, fontSize:12, fontWeight:600, paddingRight:8 }}>● {saved}</div>}
       </div>
 
       <div style={{ padding:20, maxHeight:"72vh", overflowY:"auto" }}>
-        {tab==="dashboard" && <Dashboard data={data} setTab={setTab} />}
+        {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
         {tab==="ideas" && <Ideas rows={filt(data.ideas)} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} />}
         {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
+        {tab==="weekly" && <WeeklyPlan rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
         {tab==="calendar" && <Calendar rows={filt(data.calendar)} weeklyTarget={data.settings.weeklyTarget} onTarget={setWeeklyTarget} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} />}
         {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
         {tab==="pulse" && <Pulse data={data} />}
         {tab==="settings" && <Lists data={data} persist={persist} />}
+        {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} />}
       </div>
 
       {modal && <Modal modal={modal} L={L} onClose={()=>setModal(null)} onSave={saveModal} />}
@@ -340,7 +410,7 @@ function App() {
 
 function Splash(){ return (<div style={{ height:420, display:"grid", placeItems:"center", background:C.navy, borderRadius:16 }}><div style={{ textAlign:"center" }}><div style={{ width:46, height:46, borderRadius:12, background:C.yellow, color:C.navy, fontWeight:800, display:"grid", placeItems:"center", margin:"0 auto 14px" }}>BBB</div><div style={{ color:"#fff", fontWeight:700 }}>Loading Content OS…</div></div></div>); }
 
-function Dashboard({ data, setTab }) {
+function Dashboard({ data, setTab, myName }) {
   const p = data.pipeline;
   const inProd = p.filter((r)=>["Scripting","Design","Review"].includes(r.status)).length;
   const scheduled = p.filter((r)=>r.status==="Scheduled").length;
@@ -354,6 +424,11 @@ function Dashboard({ data, setTab }) {
   const donePaid = data.collabs.filter((c)=>["Paid","Completed"].includes(c.status)).length;
   const fees = data.collabs.reduce((s,c)=>s+(Number(c.fee)||0),0);
   const upcoming = [...data.calendar].filter((c)=>c.date).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,4);
+  const wkPlans = (data.weeklyPlans||[]).filter((w)=>w.week===THIS_MON);
+  const wkSubmitters = new Set(wkPlans.map((w)=>w.owner));
+  const wkTeam = (data.lists.team||[]).filter((t)=>t!=="Unassigned");
+  const wkMissing = wkTeam.filter((t)=>!wkSubmitters.has(t));
+  const mineThisWeek = wkPlans.filter((w)=>w.owner===myName).length;
   return (
     <div style={{ display:"grid", gap:16 }}>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
@@ -372,6 +447,15 @@ function Dashboard({ data, setTab }) {
           <div style={{ borderTop:`1px dashed ${C.line}`, margin:"10px 0 4px" }} />
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline" }}><span style={{ fontSize:12.5, color:C.sub, fontWeight:600 }}>Total fees logged</span><span style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:600 }}>RM {fees.toLocaleString()}</span></div>
         </div>
+      </div>
+      <div style={card()}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}><SectionTitle icon={ClipboardList}>This week's content plan</SectionTitle><button onClick={()=>setTab("weekly")} style={linkBtn()}>Open weekly plan <ArrowRight size={13} /></button></div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:12 }}>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1 }}>{wkPlans.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Ideas planned this week</div></div>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:"#1FA463" }}>{wkSubmitters.size}/{wkTeam.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Members submitted</div></div>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:mineThisWeek?C.ink:C.red }}>{mineThisWeek}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>My ideas this week</div></div>
+        </div>
+        {wkMissing.length>0 && <div style={{ marginTop:12, fontSize:12, color:C.sub, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}><span style={{ fontWeight:600 }}>Not yet submitted:</span>{wkMissing.map((m)=><Pill key={m} bg="#F9D7D7" fg="#A11">{m}</Pill>)}</div>}
       </div>
       <div style={card()}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}><SectionTitle icon={CalendarDays}>Next up</SectionTitle><button onClick={()=>setTab("calendar")} style={linkBtn()}>Open calendar <ArrowRight size={13} /></button></div>
@@ -631,6 +715,167 @@ function Modal({ modal, L, onClose, onSave }) {
           ))}
         </div>
         <div style={{ padding:"0 20px 20px", display:"flex", gap:10, justifyContent:"flex-end" }}><button onClick={onClose} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, padding:"9px 16px", borderRadius:9, fontWeight:600, cursor:"pointer", fontSize:13 }}>Cancel</button><button onClick={()=>onSave(rec)} style={{ border:"none", background:C.yellow, color:C.navy, padding:"9px 18px", borderRadius:9, fontWeight:700, cursor:"pointer", fontSize:13 }}>{modal.mode==="add"?"Add":"Save"}</button></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── weekly content plan (members self-track; admins see a review summary) ── */
+function WeeklyPlan({ rows, allTeam, isAdmin, myName, onAdd, onEdit, onDel, setStatus }) {
+  const [week, setWeek] = useState(THIS_MON);
+  const wk = rows.filter((r)=>r.week===week);
+  const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
+  const submitters = new Set(wk.map((r)=>r.owner));
+  const missing = team.filter((t)=>!submitters.has(t));
+  const byStatus = (s)=>wk.filter((r)=>r.status===s).length;
+  const sunday = addDaysISO(week, 6);
+  const grouped = {}; wk.forEach((r)=>{ (grouped[r.owner]=grouped[r.owner]||[]).push(r); });
+  const mine = wk.filter((r)=>r.owner===myName).length;
+  const navBtn = { border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:9, padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer" };
+  const kpiBox = (n,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:110 }}><div style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:600, lineHeight:1, color:c||C.ink }}>{n}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
+  return (
+    <div>
+      <Toolbar title="Weekly Content Plan" sub={`Each member lists their planned ideas for the week. Week of ${week} → ${sunday}`} onAdd={onAdd} addLabel="Add my idea" />
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={()=>setWeek(addDaysISO(week,-7))} style={navBtn}>← Prev</button>
+        <button onClick={()=>setWeek(THIS_MON)} style={navBtn}>This week</button>
+        <button onClick={()=>setWeek(addDaysISO(week,7))} style={navBtn}>Next →</button>
+        {week===THIS_MON && <Pill bg={C.navy} fg="#fff">Current week</Pill>}
+      </div>
+      {team.includes(myName) && mine===0 && week===THIS_MON && (
+        <div style={{ background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px", fontSize:12.5, fontWeight:600, color:"#7a5b00", marginBottom:14 }}>⏰ You haven't added any content ideas for this week. Click "Add my idea" to submit your weekly plan.</div>
+      )}
+      {isAdmin && (
+        <div style={{ ...card(14), marginBottom:14 }}>
+          <SectionTitle icon={Shield}>Weekly review — admin summary</SectionTitle>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", margin:"12px 0" }}>
+            {kpiBox(`${submitters.size}/${team.length}`, "Members submitted", "#1FA463")}
+            {kpiBox(wk.length, "Total ideas", C.navy)}
+            {kpiBox(byStatus("Done"), "Done", "#1FA463")}
+            {kpiBox(byStatus("Planned"), "Still planned", C.ink)}
+          </div>
+          <div style={{ fontSize:12, color:C.sub, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+            {missing.length===0 ? <span style={{ color:"#1FA463", fontWeight:700 }}>✓ Everyone has submitted this week.</span>
+              : <><span style={{ fontWeight:600 }}>Waiting on:</span>{missing.map((m)=><Pill key={m} bg="#F9D7D7" fg="#A11">{m}</Pill>)}</>}
+          </div>
+        </div>
+      )}
+      <div style={{ display:"grid", gap:14 }}>
+        {Object.keys(grouped).length===0 && <Empty>No content planned for this week yet.</Empty>}
+        {team.filter((t)=>grouped[t]).map((owner)=>(
+          <div key={owner}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+              <span style={{ fontFamily:"'Fraunces',serif", fontSize:16, fontWeight:600 }}>{owner}</span>
+              <span style={{ fontSize:11.5, color:C.sub, background:"#EEF1F6", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>{grouped[owner].length}</span>
+              {owner===myName && <Pill bg="#E8EEF7" fg={C.navy}>You</Pill>}
+              <div style={{ flex:1, height:1, background:C.line }} />
+            </div>
+            <div style={{ display:"grid", gap:8 }}>
+              {grouped[owner].map((r)=>(
+                <div key={r._id} style={{ display:"flex", alignItems:"center", gap:12, ...card(12) }}>
+                  <BrandTag b={r.brand} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:600 }}>{r.title || "(untitled)"}</div>
+                    <div style={{ fontSize:11.5, color:C.sub, marginTop:2 }}>{[r.type, r.platform, r.targetDate && ("🎯 "+r.targetDate), r.notes].filter(Boolean).join(" · ")}</div>
+                  </div>
+                  <select value={r.status||"Planned"} onChange={(e)=>setStatus(r._id, e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:8, padding:"5px 8px", fontSize:12, fontFamily:"inherit", background:STATUS_TINT[r.status]||"#fff", fontWeight:700, cursor:"pointer" }}>
+                    {["Planned","In Progress","Done"].map((s)=><option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <div style={{ display:"flex" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── admin panel: enrol team members (calls the secure Edge Function) ── */
+function AdminPanel({ data, onEnrol, myEmail }) {
+  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [pw,setPw]=useState(""); const [role,setRole]=useState("user");
+  const [busy,setBusy]=useState(false); const [msg,setMsg]=useState(null);
+  const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
+  const submit = async (e)=>{ e.preventDefault(); setBusy(true); setMsg(null);
+    const res = await onEnrol({ name, email:email.trim(), password:pw, role });
+    setBusy(false);
+    if (res.error) setMsg({ ok:false, text:res.error });
+    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); }
+  };
+  return (
+    <div>
+      <Toolbar title="Admin" sub="Enrol team members and view the roster" />
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div style={card(16)}>
+          <SectionTitle icon={UserPlus}>Enrol a new team member</SectionTitle>
+          <form onSubmit={submit} style={{ display:"grid", gap:10, marginTop:12 }}>
+            <div><label style={lbl}>Full name</label><input value={name} onChange={(e)=>setName(e.target.value)} required style={inp()} placeholder="e.g. Serene" /></div>
+            <div><label style={lbl}>Email</label><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required style={inp()} placeholder="name@company.com" /></div>
+            <div><label style={lbl}>Temporary password</label><input value={pw} onChange={(e)=>setPw(e.target.value)} required minLength={6} style={inp()} placeholder="at least 6 characters" /></div>
+            <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="admin">Admin</option></select></div>
+            {msg && <div style={{ background:msg.ok?"#D6EFD6":"#FBE4E6", color:msg.ok?"#15724A":"#A11", fontSize:12, fontWeight:600, padding:"8px 10px", borderRadius:8 }}>{msg.text}</div>}
+            <button type="submit" disabled={busy} style={{ border:"none", background:busy?"#9FB0CC":C.navy, color:"#fff", padding:"10px", borderRadius:10, fontWeight:700, fontSize:13.5, cursor:busy?"default":"pointer" }}>{busy?"Enrolling…":"Enrol member"}</button>
+          </form>
+          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>They can log in immediately with this email + password. Ask them to change it after first login. Admins can also enrol other admins.</div>
+        </div>
+        <div style={card(16)}>
+          <SectionTitle icon={Shield}>Team roster</SectionTitle>
+          <div style={{ display:"grid", gap:7, marginTop:12 }}>
+            {(data.lists.team||[]).filter((t)=>t!=="Unassigned").map((t)=>(
+              <div key={t} style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", border:`1px solid ${C.line}`, borderRadius:9 }}>
+                <span style={{ width:26, height:26, borderRadius:7, background:"#EEF1F6", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:C.navy }}>{(t||"?").slice(0,1).toUpperCase()}</span>
+                <span style={{ fontSize:13, fontWeight:600 }}>{t}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>This roster powers the Owner dropdowns and the weekly submission check. New enrolled members are added here automatically.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── login screen (shown until a team member signs in) ── */
+function Login() {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: pw });
+    setBusy(false);
+    if (error) setErr(error.message || "Could not sign in.");
+  };
+  return (
+    <div style={{ minHeight:420, display:"grid", placeItems:"center", background:C.navy, borderRadius:16, padding:20 }}>
+      <form onSubmit={submit} style={{ width:"min(340px,100%)", background:"#fff", borderRadius:16, padding:24, boxShadow:"0 24px 60px rgba(20,35,62,.28)" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:11, marginBottom:18 }}>
+          <div style={{ width:38, height:38, borderRadius:10, background:C.yellow, color:C.navy, fontWeight:800, fontSize:14, display:"grid", placeItems:"center" }}>BBB</div>
+          <div><div style={{ fontWeight:800, fontSize:16 }}>Content OS</div><div style={{ fontSize:11.5, color:C.sub }}>Team & admin sign in</div></div>
+        </div>
+        <label style={{ fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 }}>Email</label>
+        <input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required autoFocus style={{ ...inp(), marginBottom:12 }} />
+        <label style={{ fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 }}>Password</label>
+        <input type="password" value={pw} onChange={(e)=>setPw(e.target.value)} required style={{ ...inp(), marginBottom:16 }} />
+        {err && <div style={{ background:"#FBE4E6", color:"#A11", fontSize:12, fontWeight:600, padding:"8px 10px", borderRadius:8, marginBottom:12 }}>{err}</div>}
+        <button type="submit" disabled={busy} style={{ width:"100%", border:"none", background:busy?"#9FB0CC":C.navy, color:"#fff", padding:"11px", borderRadius:10, fontWeight:700, fontSize:14, cursor:busy?"default":"pointer" }}>{busy?"Signing in…":"Sign in"}</button>
+        <div style={{ fontSize:11, color:C.sub, marginTop:14, textAlign:"center", lineHeight:1.5 }}>Accounts are created by your admin in Supabase. Contact your team lead if you can't sign in.</div>
+      </form>
+    </div>
+  );
+}
+
+/* ── shown if the Supabase keys haven't been filled in yet ── */
+function ConfigNeeded() {
+  return (
+    <div style={{ minHeight:360, display:"grid", placeItems:"center", background:C.navy, borderRadius:16, padding:24 }}>
+      <div style={{ width:"min(460px,100%)", background:"#fff", borderRadius:16, padding:26, textAlign:"center" }}>
+        <div style={{ fontSize:34, marginBottom:8 }}>🔌</div>
+        <div style={{ fontWeight:800, fontSize:17, marginBottom:8 }}>Almost there — add your Supabase keys</div>
+        <div style={{ fontSize:13, color:C.sub, lineHeight:1.6 }}>Open <b>index.html</b> and paste your <b>SUPABASE_URL</b> and <b>SUPABASE_ANON_KEY</b> near the top of the script (Supabase → Project Settings → API). Then refresh. Full steps are in the setup guide.</div>
       </div>
     </div>
   );
