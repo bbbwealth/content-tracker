@@ -149,12 +149,13 @@ const SectionTitle = ({ icon:Icon, children }) => (<div style={{ display:"flex",
 const Row = ({ k, v }) => (<div style={{ display:"flex", justifyContent:"space-between", padding:"7px 0", fontSize:13 }}><span style={{ color:C.sub, fontWeight:600 }}>{k}</span><span style={{ fontWeight:700 }}>{v}</span></div>);
 const Empty = ({ children }) => <div style={{ textAlign:"center", color:C.sub, fontSize:13, padding:30 }}>{children}</div>;
 const dow = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday:"short" }); } catch(e) { return ""; } };
-const nowISO = () => new Date().toISOString().slice(0, 10);
+const localISO = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
+const nowISO = () => localISO(new Date());
 const TODAY = nowISO();
 const dayspan = (a, b) => { if (!a || !b) return null; return (new Date(b) - new Date(a)) / 86400000; };
-const weekBounds = () => { const d = new Date(); const off = (d.getDay() + 6) % 7; const mon = new Date(d); mon.setDate(d.getDate() - off); const sun = new Date(mon); sun.setDate(mon.getDate() + 6); const f = (x) => x.toISOString().slice(0, 10); return [f(mon), f(sun)]; };
-const mondayOf = (d) => { const x = new Date(d); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return x.toISOString().slice(0, 10); };
-const addDaysISO = (iso, n) => { const x = new Date(iso + "T00:00:00"); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+const weekBounds = () => { const d = new Date(); const off = (d.getDay() + 6) % 7; const mon = new Date(d); mon.setDate(d.getDate() - off); const sun = new Date(mon); sun.setDate(mon.getDate() + 6); return [localISO(mon), localISO(sun)]; };
+const mondayOf = (d) => { const x = new Date(d); const off = (x.getDay() + 6) % 7; x.setDate(x.getDate() - off); return localISO(x); };
+const addDaysISO = (iso, n) => { const x = new Date(iso + "T00:00:00"); x.setDate(x.getDate() + n); return localISO(x); };
 const THIS_MON = mondayOf(new Date());
 const withStamp = (item, status) => { const stamps = { ...(item.stamps || {}) }; if (!stamps[status]) stamps[status] = nowISO(); return { ...item, status, stamps }; };
 const syncCalendar = (calendar, item, status) => {
@@ -302,7 +303,7 @@ function App() {
 
   const openAdd = (entity) => {
     const blank = {}; fieldSets(L)[entity].forEach((f)=>(blank[f.k]=f.t==="number"?0:""));
-    if (entity==="ideas") { blank.dateAdded=new Date().toISOString().slice(0,10); blank.status="Backlog"; blank.priority="Medium"; }
+    if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; }
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
     if (entity==="collabs") blank.status="Pitching";
