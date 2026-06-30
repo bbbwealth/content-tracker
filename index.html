@@ -59,11 +59,12 @@ const Activity = (p) => <Svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></Svg>;
 const ClipboardList = (p) => <Svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M8 11h8"/><path d="M8 15h6"/></Svg>;
 const Shield = (p) => <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></Svg>;
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></Svg>;
+const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
 const BRAND_DOT = { BBBwealth:"#2D6CDF", "KL Money":"#F5C518", Madwithmoney:"#E8192C" };
-const STATUS_TINT = { Idea:"#E8EEF7", Approved:"#FFF3CC", Scripting:"#FCE9D6", Design:"#E7DEF5", Review:"#FFE0CC", Scheduled:"#CFE8F7", Posted:"#D6EFD6", "On Hold":"#ECEEF2", Killed:"#F9D7D7", Backlog:"#E8EEF7", "In Progress":"#FCE9D6", Parked:"#ECEEF2", Planned:"#E8EEF7", Confirmed:"#FFF3CC", Delayed:"#F9D7D7", Pitching:"#E8EEF7", Negotiating:"#FFF3CC", "Contract Signed":"#FCE9D6", "In Production":"#E7DEF5", Delivered:"#FFE0CC", Invoiced:"#CFE8F7", Paid:"#D6EFD6", Completed:"#D6EFD6", Dropped:"#F9D7D7", Pending:"#FFF3CC", Done:"#D6EFD6", "N/A":"#ECEEF2" };
+const STATUS_TINT = { Idea:"#E8EEF7", Approved:"#FFF3CC", Scripting:"#FCE9D6", Design:"#E7DEF5", Review:"#FFE0CC", Scheduled:"#CFE8F7", Posted:"#D6EFD6", "On Hold":"#ECEEF2", Killed:"#F9D7D7", Backlog:"#E8EEF7", "In Progress":"#FCE9D6", Parked:"#ECEEF2", Planned:"#E8EEF7", Confirmed:"#FFF3CC", Delayed:"#F9D7D7", Pitching:"#E8EEF7", Negotiating:"#FFF3CC", "Contract Signed":"#FCE9D6", "In Production":"#E7DEF5", Delivered:"#FFE0CC", Invoiced:"#CFE8F7", Paid:"#D6EFD6", Completed:"#D6EFD6", Dropped:"#F9D7D7", Pending:"#FFF3CC", Done:"#D6EFD6", "N/A":"#ECEEF2", Scripted:"#FCE9D6", Filmed:"#E7DEF5", Edited:"#FFE0CC", Published:"#D6EFD6" };
 const statusInk = (s) => (["Killed","Dropped","Delayed"].includes(s) ? "#A11" : C.ink);
 const PRIORITY = { High:{bg:C.red,fg:"#fff"}, Medium:{bg:C.yellow,fg:C.ink}, Low:{bg:"#DCE2EC",fg:C.sub} };
 const COLLAB_TYPE = {
@@ -104,14 +105,17 @@ const SEED = {
     { code:"P-003", partner:"FSMOne", ctype:"Affiliate (Performance-Based)", brand:"BBBwealth", talent:"Hubert", deliverables:"Bond guidebook lead magnet + webinar", fee:0, status:"Completed", briefDate:"2026-04-01", contentDue:"2026-04-20", goLive:"2026-04-25", contract:"Done", invoice:"N/A", pic:"Hubert", notes:"Referral community campaign" },
   ]),
   weeklyPlans: seedRows([
-    { week:"2026-06-29", owner:"Hubert", brand:"BBBwealth", type:"Carousel", title:"美联储利率决议解读", platform:"Instagram", targetDate:"2026-07-02", notes:"配合播客同周发", status:"Planned" },
-    { week:"2026-06-29", owner:"Hubert", brand:"BBBwealth", type:"Podcast", title:"讲钱不讲情 — 债券入门", platform:"Spotify", targetDate:"2026-07-04", notes:"女搭档", status:"In Progress" },
-    { week:"2026-06-29", owner:"Serene", brand:"KL Money", type:"Carousel", title:"2026 雪隆区生活成本", platform:"小红书 (RED)", targetDate:"2026-07-03", notes:"用最新数据", status:"Planned" },
-    { week:"2026-06-29", owner:"Madeleine", brand:"Madwithmoney", type:"Reel", title:"RM1000 月供组合实测", platform:"Instagram", targetDate:"2026-07-01", notes:"新手系列 ep.4", status:"Done" },
+    { week:"2026-06-29", owner:"Hubert", type:"Carousel", topic:"Finance", title:"EPF 2025 派息全拆解", status:"Published", notes:"配合播客同周发", stamps:{ Scripted:"2026-06-29", Filmed:"2026-06-30", Edited:"2026-07-01", Published:"2026-07-02" } },
+    { week:"2026-06-29", owner:"Hubert", type:"Long Video", topic:"Finance", title:"债券入门完整教学", status:"Edited", notes:"", stamps:{ Scripted:"2026-06-29", Filmed:"2026-07-01", Edited:"2026-07-02" } },
+    { week:"2026-06-29", owner:"Serene", type:"Reel", topic:"AI", title:"3 个 AI 工具帮你做内容", status:"Filmed", notes:"", stamps:{ Scripted:"2026-06-30", Filmed:"2026-07-01" } },
+    { week:"2026-06-29", owner:"Serene", type:"Pic + Commentary", topic:"Property", title:"雪隆区房价对比", status:"Scripted", notes:"用最新数据", stamps:{ Scripted:"2026-07-01" } },
+    { week:"2026-06-29", owner:"Madeleine", type:"Reel", topic:"Finance", title:"RM1000 月供组合实测", status:"Published", notes:"新手系列 ep.4", stamps:{ Scripted:"2026-06-29", Filmed:"2026-06-30", Edited:"2026-06-30", Published:"2026-07-01" } },
+    { week:"2026-06-29", owner:"Madeleine", type:"Reel", topic:"Travel", title:"穷游槟城三天两夜", status:"Idea", notes:"", stamps:{} },
+    { week:"2026-06-29", owner:"Mark", type:"Carousel", topic:"AI", title:"AI 会取代的 5 个工作", status:"Idea", notes:"", stamps:{} },
   ]),
   lists: {
     brands:["BBBwealth","KL Money","Madwithmoney"],
-    types:["Carousel","Reel","Podcast","Article","Story"],
+    types:["Reel","Carousel","Pic + Commentary","Long Video"],
     platforms:["Instagram","小红书 (RED)","TikTok","Facebook","YouTube","WhatsApp","Spotify","Website"],
     pipelineStatus:["Idea","Approved","Scripting","Design","Review","Scheduled","Posted","On Hold","Killed"],
     ideaStatus:["Backlog","Approved","In Progress","Parked","Killed"],
@@ -121,9 +125,10 @@ const SEED = {
     collabStatus:["Pitching","Negotiating","Contract Signed","In Production","Delivered","Invoiced","Paid","Completed","Dropped"],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
-    weeklyStatus:["Planned","In Progress","Done"],
+    topics:["AI","Finance","Travel","Property","Lifestyle","Business"],
+    contentStatus:["Idea","Scripted","Filmed","Edited","Published"],
   },
-  settings: { weeklyTarget: 4 },
+  settings: { weeklyTarget: 4, ideasTarget: 20 },
 };
 const PIPE_COLS = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
 const KEY = "bbb-content-os-v1";
@@ -159,7 +164,8 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = d.weeklyPlans || []; if (!d.lists.weeklyStatus) d.lists.weeklyStatus = ["Planned","In Progress","Done"]; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["AI","Finance","Travel","Property","Lifestyle","Business"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; return d; };
+const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
     <div style={{ display:"flex", alignItems:"center", marginBottom:16, gap:12 }}>
@@ -197,10 +203,10 @@ const fieldSets = (L) => ({
     { k:"caption", l:"Caption / Notes", t:"textarea", full:1 }, { k:"link", l:"Link", t:"text", full:1 },
   ],
   weeklyPlans: [
-    { k:"owner", l:"Team Member", t:"select", o:L.team }, { k:"brand", l:"Brand", t:"select", o:L.brands },
-    { k:"type", l:"Content Type", t:"select", o:L.types }, { k:"title", l:"Content Idea / Title", t:"text", full:1 },
-    { k:"platform", l:"Target Platform", t:"select", o:L.platforms }, { k:"targetDate", l:"Target Post Date", t:"date" },
-    { k:"status", l:"Status", t:"select", o:L.weeklyStatus }, { k:"week", l:"Week (Mon)", t:"date" },
+    { k:"owner", l:"Team Member", t:"select", o:L.team }, { k:"type", l:"Post Type", t:"select", o:L.types },
+    { k:"topic", l:"Topic", t:"select", o:L.topics }, { k:"status", l:"Stage", t:"select", o:L.contentStatus },
+    { k:"title", l:"Content Idea / Title", t:"text", full:1 },
+    { k:"week", l:"Week (Mon)", t:"date" },
     { k:"notes", l:"Notes / Hook", t:"textarea", full:1 },
   ],
   collabs: [
@@ -300,7 +306,7 @@ function App() {
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
     if (entity==="collabs") blank.status="Pitching";
-    if (entity==="weeklyPlans") { blank.status="Planned"; blank.week=THIS_MON; blank.owner = L.team.includes(myName) ? myName : ""; }
+    if (entity==="weeklyPlans") { blank.status="Idea"; blank.week=THIS_MON; blank.owner = L.team.includes(myName) ? myName : ""; }
     setModal({ entity, mode:"add", record:blank });
   };
   const openEdit = (entity, record) => setModal({ entity, mode:"edit", record:{ ...record } });
@@ -309,6 +315,7 @@ function App() {
     if (mode==="add") {
       let row = { _id:uid(), ...rec }; if (codePrefix[entity]) row.code = nextCode(rows, codePrefix[entity]);
       if (entity==="pipeline") row = withStamp(row, row.status);
+      if (entity==="weeklyPlans") row = stampContent(row);
       rows.push(row);
       if (entity==="pipeline" && (row.status==="Scheduled" || row.status==="Posted")) extra.calendar = syncCalendar(data.calendar, row, row.status);
     } else {
@@ -351,12 +358,12 @@ function App() {
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   };
-  const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id?{ ...r, status }:r)) });
+  const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
 
   const NAV = [
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
-    { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Weekly Plan", icon:ClipboardList },
-    { id:"calendar", label:"Calendar", icon:CalendarDays },
+    { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Content Tracker", icon:ClipboardList },
+    { id:"productivity", label:"Productivity", icon:BarChart3 }, { id:"calendar", label:"Calendar", icon:CalendarDays },
     { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
@@ -395,7 +402,8 @@ function App() {
         {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
         {tab==="ideas" && <Ideas rows={filt(data.ideas)} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} />}
         {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
-        {tab==="weekly" && <WeeklyPlan rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
+        {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
+        {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
         {tab==="calendar" && <Calendar rows={filt(data.calendar)} weeklyTarget={data.settings.weeklyTarget} onTarget={setWeeklyTarget} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} />}
         {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
         {tab==="pulse" && <Pulse data={data} />}
@@ -425,9 +433,11 @@ function Dashboard({ data, setTab, myName }) {
   const fees = data.collabs.reduce((s,c)=>s+(Number(c.fee)||0),0);
   const upcoming = [...data.calendar].filter((c)=>c.date).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,4);
   const wkPlans = (data.weeklyPlans||[]).filter((w)=>w.week===THIS_MON);
-  const wkSubmitters = new Set(wkPlans.map((w)=>w.owner));
   const wkTeam = (data.lists.team||[]).filter((t)=>t!=="Unassigned");
-  const wkMissing = wkTeam.filter((t)=>!wkSubmitters.has(t));
+  const ideasTarget = (data.settings && data.settings.ideasTarget) || 20;
+  const wkHit = wkTeam.filter((t)=>wkPlans.filter((w)=>w.owner===t).length >= ideasTarget).length;
+  const wkUnder = wkTeam.filter((t)=>wkPlans.filter((w)=>w.owner===t).length < ideasTarget);
+  const wkPublished = wkPlans.filter((w)=>w.status==="Published").length;
   const mineThisWeek = wkPlans.filter((w)=>w.owner===myName).length;
   return (
     <div style={{ display:"grid", gap:16 }}>
@@ -449,13 +459,14 @@ function Dashboard({ data, setTab, myName }) {
         </div>
       </div>
       <div style={card()}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}><SectionTitle icon={ClipboardList}>This week's content plan</SectionTitle><button onClick={()=>setTab("weekly")} style={linkBtn()}>Open weekly plan <ArrowRight size={13} /></button></div>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}><SectionTitle icon={ClipboardList}>This week's content</SectionTitle><button onClick={()=>setTab("weekly")} style={linkBtn()}>Open tracker <ArrowRight size={13} /></button></div>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginTop:12 }}>
-          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1 }}>{wkPlans.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Ideas planned this week</div></div>
-          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:"#1FA463" }}>{wkSubmitters.size}/{wkTeam.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Members submitted</div></div>
-          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:mineThisWeek?C.ink:C.red }}>{mineThisWeek}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>My ideas this week</div></div>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1 }}>{wkPlans.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Ideas this week</div></div>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:"#1FA463" }}>{wkHit}/{wkTeam.length}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Hit {ideasTarget}-idea target</div></div>
+          <div style={card(13)}><div style={{ fontFamily:"'Fraunces',serif", fontSize:28, fontWeight:600, lineHeight:1, color:"#1FA463" }}>{wkPublished}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Published this week</div></div>
         </div>
-        {wkMissing.length>0 && <div style={{ marginTop:12, fontSize:12, color:C.sub, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}><span style={{ fontWeight:600 }}>Not yet submitted:</span>{wkMissing.map((m)=><Pill key={m} bg="#F9D7D7" fg="#A11">{m}</Pill>)}</div>}
+        <div style={{ marginTop:12, fontSize:12.5, color:C.sub }}>My ideas this week: <b style={{ color:mineThisWeek>=ideasTarget?"#15724A":C.red }}>{mineThisWeek}/{ideasTarget}</b></div>
+        {wkUnder.length>0 && <div style={{ marginTop:8, fontSize:12, color:C.sub, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}><span style={{ fontWeight:600 }}>Below target:</span>{wkUnder.map((m)=><Pill key={m} bg="#F9D7D7" fg="#A11">{m}</Pill>)}</div>}
       </div>
       <div style={card()}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}><SectionTitle icon={CalendarDays}>Next up</SectionTitle><button onClick={()=>setTab("calendar")} style={linkBtn()}>Open calendar <ArrowRight size={13} /></button></div>
@@ -720,73 +731,142 @@ function Modal({ modal, L, onClose, onSave }) {
   );
 }
 
-/* ── weekly content plan (members self-track; admins see a review summary) ── */
-function WeeklyPlan({ rows, allTeam, isAdmin, myName, onAdd, onEdit, onDel, setStatus }) {
+/* ── content tracker (members submit weekly ideas + track execution stages) ── */
+function ContentTracker({ rows, allTeam, isAdmin, myName, target, onAdd, onEdit, onDel, setStatus }) {
+  const STAGES = ["Idea","Scripted","Filmed","Edited","Published"];
+  const DONE = ["Scripted","Filmed","Edited","Published"];
   const [week, setWeek] = useState(THIS_MON);
   const wk = rows.filter((r)=>r.week===week);
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
-  const submitters = new Set(wk.map((r)=>r.owner));
-  const missing = team.filter((t)=>!submitters.has(t));
-  const byStatus = (s)=>wk.filter((r)=>r.status===s).length;
   const sunday = addDaysISO(week, 6);
   const grouped = {}; wk.forEach((r)=>{ (grouped[r.owner]=grouped[r.owner]||[]).push(r); });
   const mine = wk.filter((r)=>r.owner===myName).length;
+  const countFor = (o)=>wk.filter((r)=>r.owner===o).length;
+  const hitTarget = team.filter((t)=>countFor(t)>=target).length;
+  const published = wk.filter((r)=>r.status==="Published").length;
   const navBtn = { border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:9, padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer" };
-  const kpiBox = (n,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:110 }}><div style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:600, lineHeight:1, color:c||C.ink }}>{n}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
+  const kpiBox = (n,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontFamily:"'Fraunces',serif", fontSize:24, fontWeight:600, lineHeight:1, color:c||C.ink }}>{n}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
+  const bar = (val,max,color)=>(<div style={{ height:6, background:"#EEF1F6", borderRadius:4, overflow:"hidden" }}><div style={{ width:`${Math.min(100,(val/Math.max(1,max))*100)}%`, height:"100%", background:color }} /></div>);
   return (
     <div>
-      <Toolbar title="Weekly Content Plan" sub={`Each member lists their planned ideas for the week. Week of ${week} → ${sunday}`} onAdd={onAdd} addLabel="Add my idea" />
+      <Toolbar title="Content Tracker" sub={`Each member submits ≥ ${target} ideas/week, then tracks each through Scripted → Filmed → Edited → Published. Week of ${week} → ${sunday}`} onAdd={onAdd} addLabel="Add idea" />
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
         <button onClick={()=>setWeek(addDaysISO(week,-7))} style={navBtn}>← Prev</button>
         <button onClick={()=>setWeek(THIS_MON)} style={navBtn}>This week</button>
         <button onClick={()=>setWeek(addDaysISO(week,7))} style={navBtn}>Next →</button>
         {week===THIS_MON && <Pill bg={C.navy} fg="#fff">Current week</Pill>}
       </div>
-      {team.includes(myName) && mine===0 && week===THIS_MON && (
-        <div style={{ background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px", fontSize:12.5, fontWeight:600, color:"#7a5b00", marginBottom:14 }}>⏰ You haven't added any content ideas for this week. Click "Add my idea" to submit your weekly plan.</div>
+      {team.includes(myName) && week===THIS_MON && mine<target && (
+        <div style={{ background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px", fontSize:12.5, fontWeight:600, color:"#7a5b00", marginBottom:14 }}>⏰ You've submitted {mine} of {target} ideas this week — add {target-mine} more before Monday's meeting.</div>
       )}
       {isAdmin && (
         <div style={{ ...card(14), marginBottom:14 }}>
-          <SectionTitle icon={Shield}>Weekly review — admin summary</SectionTitle>
+          <SectionTitle icon={Shield}>Monday review — team summary</SectionTitle>
           <div style={{ display:"flex", gap:10, flexWrap:"wrap", margin:"12px 0" }}>
-            {kpiBox(`${submitters.size}/${team.length}`, "Members submitted", "#1FA463")}
+            {kpiBox(`${hitTarget}/${team.length}`, `Hit ${target}-idea target`, "#1FA463")}
             {kpiBox(wk.length, "Total ideas", C.navy)}
-            {kpiBox(byStatus("Done"), "Done", "#1FA463")}
-            {kpiBox(byStatus("Planned"), "Still planned", C.ink)}
+            {kpiBox(published, "Published", "#1FA463")}
+            {kpiBox(wk.filter((r)=>DONE.includes(r.status)&&r.status!=="Published").length, "In progress", "#C98A00")}
           </div>
-          <div style={{ fontSize:12, color:C.sub, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-            {missing.length===0 ? <span style={{ color:"#1FA463", fontWeight:700 }}>✓ Everyone has submitted this week.</span>
-              : <><span style={{ fontWeight:600 }}>Waiting on:</span>{missing.map((m)=><Pill key={m} bg="#F9D7D7" fg="#A11">{m}</Pill>)}</>}
+          <div style={{ display:"grid", gap:8 }}>
+            {team.map((t)=>{ const c=countFor(t); const pub=wk.filter((r)=>r.owner===t&&r.status==="Published").length; const ok=c>=target; return (
+              <div key={t} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ width:90, fontSize:12.5, fontWeight:600 }}>{t}</span>
+                <div style={{ flex:1 }}>{bar(c,target,ok?"#1FA463":C.yellow)}</div>
+                <span style={{ fontSize:12, fontWeight:700, color:ok?"#1FA463":C.red, width:58, textAlign:"right" }}>{c}/{target}</span>
+                <span style={{ fontSize:11.5, color:C.sub, width:84, textAlign:"right" }}>{pub} published</span>
+              </div>
+            ); })}
           </div>
         </div>
       )}
       <div style={{ display:"grid", gap:14 }}>
-        {Object.keys(grouped).length===0 && <Empty>No content planned for this week yet.</Empty>}
-        {team.filter((t)=>grouped[t]).map((owner)=>(
+        {Object.keys(grouped).length===0 && <Empty>No ideas submitted for this week yet.</Empty>}
+        {team.filter((t)=>grouped[t]).map((owner)=>{ const c=grouped[owner].length; const ok=c>=target; return (
           <div key={owner}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
               <span style={{ fontFamily:"'Fraunces',serif", fontSize:16, fontWeight:600 }}>{owner}</span>
-              <span style={{ fontSize:11.5, color:C.sub, background:"#EEF1F6", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>{grouped[owner].length}</span>
+              <span style={{ fontSize:11.5, color:ok?"#15724A":C.red, background:ok?"#DCF0E4":"#FBE4E6", borderRadius:6, padding:"2px 8px", fontWeight:700 }}>{c}/{target}</span>
               {owner===myName && <Pill bg="#E8EEF7" fg={C.navy}>You</Pill>}
               <div style={{ flex:1, height:1, background:C.line }} />
             </div>
             <div style={{ display:"grid", gap:8 }}>
               {grouped[owner].map((r)=>(
-                <div key={r._id} style={{ display:"flex", alignItems:"center", gap:12, ...card(12) }}>
-                  <BrandTag b={r.brand} />
+                <div key={r._id} style={{ display:"flex", alignItems:"flex-start", gap:12, ...card(12) }}>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13.5, fontWeight:600 }}>{r.title || "(untitled)"}</div>
-                    <div style={{ fontSize:11.5, color:C.sub, marginTop:2 }}>{[r.type, r.platform, r.targetDate && ("🎯 "+r.targetDate), r.notes].filter(Boolean).join(" · ")}</div>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
+                      <span style={{ fontSize:13.5, fontWeight:600 }}>{r.title || "(untitled)"}</span>
+                      <Pill bg="#EEF1F6" fg={C.sub}>{r.type||"—"}</Pill>
+                      {r.topic && <Pill bg="#E8EEF7" fg={C.navy}>{r.topic}</Pill>}
+                    </div>
+                    <div style={{ fontSize:11, color:C.sub, marginTop:4 }}>
+                      {DONE.map((st)=> (r.stamps&&r.stamps[st]) ? <span key={st} style={{ marginRight:12 }}>✓ {st} <b style={{ color:C.ink }}>{r.stamps[st].slice(5)}</b></span> : null)}
+                      {(!r.stamps || !DONE.some((st)=>r.stamps[st])) && <span style={{ fontStyle:"italic" }}>not started</span>}
+                      {r.notes && <span style={{ display:"block", marginTop:3 }}>{r.notes}</span>}
+                    </div>
                   </div>
-                  <select value={r.status||"Planned"} onChange={(e)=>setStatus(r._id, e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:8, padding:"5px 8px", fontSize:12, fontFamily:"inherit", background:STATUS_TINT[r.status]||"#fff", fontWeight:700, cursor:"pointer" }}>
-                    {["Planned","In Progress","Done"].map((s)=><option key={s} value={s}>{s}</option>)}
+                  <select value={r.status||"Idea"} onChange={(e)=>setStatus(r._id, e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:8, padding:"5px 8px", fontSize:12, fontFamily:"inherit", background:STATUS_TINT[r.status]||"#fff", fontWeight:700, cursor:"pointer" }}>
+                    {STAGES.map((s)=><option key={s} value={s}>{s}</option>)}
                   </select>
                   <div style={{ display:"flex" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div>
                 </div>
               ))}
             </div>
           </div>
-        ))}
+        ); })}
+      </div>
+    </div>
+  );
+}
+
+/* ── productivity calendar (counts every status update per day, per person) ── */
+function Productivity({ rows, team }) {
+  const STAGES = ["Scripted","Filmed","Edited","Published"];
+  const members = ["All", ...(team||[]).filter((t)=>t!=="Unassigned")];
+  const [member, setMember] = useState("All");
+  const now = new Date();
+  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const counts = {};
+  rows.forEach((r)=>{ if (member!=="All" && r.owner!==member) return; const s=r.stamps||{}; STAGES.forEach((st)=>{ if (s[st]) counts[s[st]]=(counts[s[st]]||0)+1; }); });
+  const first = new Date(ym.y, ym.m, 1);
+  const startPad = (first.getDay()+6)%7;
+  const dim = new Date(ym.y, ym.m+1, 0).getDate();
+  const pad2 = (n)=>String(n).padStart(2,"0");
+  const cells = []; for (let i=0;i<startPad;i++) cells.push(null);
+  for (let d=1; d<=dim; d++){ const iso=`${ym.y}-${pad2(ym.m+1)}-${pad2(d)}`; cells.push({ d, iso, n: counts[iso]||0 }); }
+  while (cells.length%7!==0) cells.push(null);
+  const monthKey = `${ym.y}-${pad2(ym.m+1)}`;
+  const monthTotal = Object.keys(counts).filter((k)=>k.startsWith(monthKey)).reduce((a,k)=>a+counts[k],0);
+  const maxN = Math.max(1, ...cells.filter(Boolean).map((c)=>c.n));
+  const monthName = first.toLocaleDateString("en-US",{ month:"long", year:"numeric" });
+  const shift = (delta)=>setYm(({y,m})=>{ const d=new Date(y,m+delta,1); return { y:d.getFullYear(), m:d.getMonth() }; });
+  const heat = (n)=>{ if (!n) return "#fff"; const t=n/maxN; if (t>0.66) return "#1FA463"; if (t>0.33) return "#7CC59A"; return "#CFE8D9"; };
+  const navBtn = { border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:9, padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer" };
+  const TODAYV = nowISO();
+  return (
+    <div>
+      <Toolbar title="Productivity" sub="Each square counts the content actions completed that day — moving an idea to Scripted, Filmed, Edited or Published." />
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={()=>shift(-1)} style={navBtn}>←</button>
+        <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:600, minWidth:160, textAlign:"center" }}>{monthName}</span>
+        <button onClick={()=>shift(1)} style={navBtn}>→</button>
+        <div style={{ flex:1 }} />
+        <span style={{ fontSize:12, color:C.sub, fontWeight:600 }}>Member</span>
+        <select value={member} onChange={(e)=>setMember(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px", fontSize:13, fontFamily:"inherit", background:"#fff", cursor:"pointer" }}>
+          {members.map((m)=><option key={m} value={m}>{m}</option>)}
+        </select>
+        <Pill bg={C.navy} fg="#fff">{monthTotal} actions</Pill>
+      </div>
+      <div style={card(14)}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6 }}>
+          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d)=>(<div key={d} style={{ fontSize:11, fontWeight:700, color:C.sub, textAlign:"center", paddingBottom:4 }}>{d}</div>))}
+          {cells.map((c,i)=>(
+            <div key={i} style={{ aspectRatio:"1 / 1", borderRadius:9, border:`1px solid ${c&&c.iso===TODAYV?C.navy:C.line}`, background:c?heat(c.n):"transparent", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:6, minHeight:52 }}>
+              {c && <span style={{ fontSize:11, fontWeight:600, color:c.n>maxN*0.33?"#fff":C.sub }}>{c.d}</span>}
+              {c && c.n>0 && <span style={{ fontFamily:"'Fraunces',serif", fontSize:18, fontWeight:600, color:c.n>maxN*0.33?"#fff":C.ink, textAlign:"right" }}>{c.n}</span>}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
