@@ -119,7 +119,7 @@ const SEED = {
     types:["Reel","Carousel","Pic + Commentary","Long Video"],
     platforms:["Instagram","小红书 (RED)","TikTok","Facebook","YouTube","WhatsApp","Spotify","Website"],
     pipelineStatus:["Idea","Approved","Scripting","Design","Review","Scheduled","Posted","On Hold","Killed"],
-    ideaStatus:["Backlog","Approved","In Progress","Parked","Killed"],
+    ideaStatus:["Backlog","Approved","Scheduled","In Progress","Parked","Killed"],
     priority:["High","Medium","Low"],
     team:["Hubert","Serene","Madeleine","Mark","Unassigned"],
     calStatus:["Planned","Confirmed","Scheduled","Posted","Delayed"],
@@ -129,7 +129,7 @@ const SEED = {
     topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
     contentStatus:["Idea","Scripted","Filmed","Edited","Published"],
   },
-  settings: { weeklyTarget: 4, ideasTarget: 20 },
+  settings: { weeklyTarget: 4, ideasTarget: 20, ideaQuota: 25, dailyPosts: 3 },
 };
 const PIPE_COLS = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
 const KEY = "bbb-content-os-v1";
@@ -166,7 +166,7 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -361,6 +361,14 @@ function App() {
     } catch (e) { return { error: String((e && e.message) || e) }; }
   };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
+  const approveIdea = (_id) => setStatus("ideas", _id, "Approved");
+  const scheduleIdeas = (ideaIds, date, time) => {
+    let cal=[...data.calendar], ideas=[...data.ideas];
+    ideaIds.forEach((id)=>{ const idea=data.ideas.find((i)=>i._id===id); if(!idea) return;
+      cal.push({ _id:uid(), date, time:time||"8:00 PM", brand:idea.brand, platform:"Instagram", type:idea.type, title:idea.title, owner:idea.by, status:"Planned", caption:idea.category||"", link:"", fromIdea:id });
+      ideas=ideas.map((i)=>(i._id===id ? { ...i, status:"Scheduled" } : i)); });
+    persist({ ...data, calendar:cal, ideas });
+  };
 
   const NAV = [
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
@@ -409,11 +417,11 @@ function App() {
 
         <div style={{ padding:24, flex:1 }}>
           {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
-          {tab==="ideas" && <Ideas rows={filt(data.ideas)} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} />}
+          {tab==="ideas" && <Ideas rows={filt(data.ideas)} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} onApprove={approveIdea} />}
           {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} pipelineStatus={L.pipelineStatus} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
           {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
-          {tab==="calendar" && <Calendar rows={filt(data.calendar)} weeklyTarget={data.settings.weeklyTarget} onTarget={setWeeklyTarget} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} />}
+          {tab==="calendar" && <Calendar rows={data.calendar} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} onSchedule={scheduleIdeas} />}
           {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
@@ -489,14 +497,42 @@ function Dashboard({ data, setTab, myName }) {
   );
 }
 
-function Ideas({ rows, onAdd, onEdit, onDel, onPromote }) {
+function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove }) {
+  const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
+  const wkIdeas = (allIdeas||[]).filter((i)=>i.dateAdded && mondayOf(i.dateAdded)===THIS_MON);
+  const mine = wkIdeas.filter((i)=>i.by===myName).length;
+  const countFor = (t)=>wkIdeas.filter((i)=>i.by===t).length;
+  const pending = (allIdeas||[]).filter((i)=>i.status==="Backlog").length;
+  const hit = team.filter((t)=>countFor(t)>=quota).length;
+  const kpiBox=(n,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontFamily:"inherit", fontSize:24, fontWeight:700, lineHeight:1, color:c||C.ink }}>{n}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
+  const barRow=(t)=>{ const c=countFor(t); const ok=c>=quota; return (
+    <div key={t} style={{ display:"flex", alignItems:"center", gap:10 }}>
+      <span style={{ width:90, fontSize:12.5, fontWeight:600 }}>{t}</span>
+      <div style={{ flex:1, height:6, background:"#EEF1F6", borderRadius:4, overflow:"hidden" }}><div style={{ width:`${Math.min(100,(c/quota)*100)}%`, height:"100%", background:ok?"#1FA463":C.yellow }} /></div>
+      <span style={{ fontSize:12, fontWeight:700, color:ok?"#1FA463":C.red, width:52, textAlign:"right" }}>{c}/{quota}</span>
+    </div>
+  ); };
   return (
     <div>
-      <Toolbar title="Idea Bank" sub={`${rows.length} ideas`} onAdd={onAdd} addLabel="New idea" />
+      <Toolbar title="Idea Bank" sub={`Every member submits ≥ ${quota} ideas/week. Admin approves them, then they can be scheduled on the Calendar.`} onAdd={onAdd} addLabel="New idea" />
+      {team.includes(myName) && mine<quota && (
+        <div style={{ background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px", fontSize:12.5, fontWeight:600, color:"#7a5b00", marginBottom:14 }}>⏰ You've submitted {mine} of {quota} ideas this week — add {quota-mine} more.</div>
+      )}
+      {isAdmin && (
+        <div style={{ ...card(14), marginBottom:16 }}>
+          <SectionTitle icon={Shield}>Weekly submissions — {mondayOf(new Date())} → {addDaysISO(mondayOf(new Date()),6)}</SectionTitle>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", margin:"12px 0" }}>
+            {kpiBox(`${hit}/${team.length}`, `Hit ${quota}-idea quota`, "#1FA463")}
+            {kpiBox(wkIdeas.length, "Ideas this week", C.navy)}
+            {kpiBox(pending, "Pending approval", pending?"#C98A00":C.ink)}
+          </div>
+          <div style={{ display:"grid", gap:8 }}>{team.map((t)=>barRow(t))}</div>
+        </div>
+      )}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
         {rows.map((r,i)=>(
           <div key={r._id} style={{ ...card(14), animation:`rise .35s ${i*0.03}s both` }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2 }}><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
@@ -568,51 +604,125 @@ function IdeaPicker({ ideas, pipelineAll, onClose, onConfirm }) {
   );
 }
 
-function Calendar({ rows, onAdd, onEdit, onDel, weeklyTarget, onTarget }) {
+function Calendar({ rows, allIdeas, allTeam, isAdmin, myName, dailyPosts, onAdd, onEdit, onDel, onSchedule }) {
+  const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
+  const [member, setMember] = useState(isAdmin ? "All" : (team.includes(myName) ? myName : "All"));
+  const now = new Date();
+  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [picker, setPicker] = useState(null);
+  const approved = (allIdeas||[]).filter((i)=>i.status==="Approved");
+  const pad2 = (n)=>String(n).padStart(2,"0");
+  const scoped = (r)=> member==="All" || r.owner===member;
+  const byDay = {}; rows.filter((r)=>r.date && scoped(r)).forEach((r)=>{ (byDay[r.date]=byDay[r.date]||[]).push(r); });
+  const first = new Date(ym.y, ym.m, 1);
+  const startPad = (first.getDay()+6)%7;
+  const dim = new Date(ym.y, ym.m+1, 0).getDate();
+  const cells = []; for (let i=0;i<startPad;i++) cells.push(null);
+  for (let d=1; d<=dim; d++){ const iso=`${ym.y}-${pad2(ym.m+1)}-${pad2(d)}`; cells.push({ d, iso, items:(byDay[iso]||[]) }); }
+  while (cells.length%7!==0) cells.push(null);
+  const monthName = first.toLocaleDateString("en-US",{ month:"long", year:"numeric" });
+  const shift = (delta)=>setYm(({y,m})=>{ const dd=new Date(y,m+delta,1); return { y:dd.getFullYear(), m:dd.getMonth() }; });
+  const navBtn = { border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:9, padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer" };
   const [wkStart, wkEnd] = weekBounds();
-  const dated = rows.filter((r)=>r.date);
-  const thisWeek = dated.filter((r)=>r.date>=wkStart && r.date<=wkEnd);
-  const due = dated.filter((r)=>r.date<=TODAY);
-  const delivered = due.filter((r)=>r.status==="Posted");
-  const missed = due.filter((r)=>r.status!=="Posted");
-  const rate = due.length ? Math.round((delivered.length/due.length)*100) : null;
-  const isMissed = (r) => r.date < TODAY && r.status !== "Posted";
-  const groups = useMemo(()=>{ const g={}; [...rows].filter((r)=>r.date).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).forEach((r)=>{ (g[r.date]=g[r.date]||[]).push(r); }); return g; }, [rows]);
-  const kpi = (n, l, c, sub) => (<div style={{ ...card(13), flex:1, minWidth:120 }}><div style={{ fontFamily:"inherit", fontSize:28, fontWeight:600, lineHeight:1, color:c||C.ink }}>{n}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>{l}</div>{sub && <div style={{ fontSize:10.5, color:C.sub, marginTop:2 }}>{sub}</div>}</div>);
+  const weekDates = [0,1,2,3,4,5,6].map((i)=>addDaysISO(wkStart,i));
+  const weekTarget = dailyPosts*7;
+  const plannedWk = (t)=>rows.filter((r)=>r.owner===t && r.date>=wkStart && r.date<=wkEnd).length;
+  const daysMet = (t)=>weekDates.filter((d)=>rows.filter((r)=>r.owner===t && r.date===d).length>=dailyPosts).length;
+  const daysUnder = (t)=>weekDates.filter((d)=>rows.filter((r)=>r.owner===t && r.date===d).length<dailyPosts);
+  const cellBg = (n)=> member==="All" ? "#fff" : (n>=dailyPosts ? "#EAF6EF" : n>0 ? "#FFF7E6" : "#fff");
+  const kpiBox=(v,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontFamily:"inherit", fontSize:24, fontWeight:700, lineHeight:1, color:c||C.ink }}>{v}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
   return (
     <div>
-      <Toolbar title="Posting Calendar" sub="Plan ahead. Anything past its date and not Posted counts as missed." onAdd={onAdd} addLabel="Schedule post" />
-      <div style={{ display:"flex", gap:10, marginBottom:18, flexWrap:"wrap" }}>
-        <div style={{ ...card(13), flex:1, minWidth:150 }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-            <div style={{ fontFamily:"inherit", fontSize:28, fontWeight:600, lineHeight:1 }}>{thisWeek.length}</div>
-            <div style={{ fontSize:14, color:C.sub, fontWeight:600 }}>/ <input type="number" value={weeklyTarget} onChange={(e)=>onTarget(e.target.value)} style={{ width:34, border:`1px solid ${C.line}`, borderRadius:6, padding:"2px 4px", fontSize:13, fontFamily:"inherit", textAlign:"center" }} /></div>
-          </div>
-          <div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:6 }}>Planned this week</div>
-          <div style={{ height:6, background:"#EEF1F6", borderRadius:4, overflow:"hidden", marginTop:7 }}><div style={{ width:`${Math.min(100,(thisWeek.length/Math.max(1,weeklyTarget))*100)}%`, height:"100%", background: thisWeek.length>=weeklyTarget ? "#1FA463" : C.yellow }} /></div>
-        </div>
-        {kpi(rate==null?"—":rate+"%", "On-time delivery", rate==null?C.ink:(rate>=80?"#1FA463":rate>=50?"#C98A00":C.red), `${delivered.length}/${due.length} due posts`)}
-        {kpi(delivered.length, "Delivered", "#1FA463")}
-        {kpi(missed.length, "Missed", missed.length?C.red:C.ink, "past date, not posted")}
+      <Toolbar title="Posting Calendar" sub={`Plan ${dailyPosts} posts every day. Click a day to schedule approved ideas.`} onAdd={()=>setPicker({ date:"" })} addLabel="Add from approved" onSecondary={onAdd} secondaryLabel="Manual post" secondaryIcon={Plus} />
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={()=>shift(-1)} style={navBtn}>←</button>
+        <span style={{ fontFamily:"inherit", fontSize:18, fontWeight:700, minWidth:160, textAlign:"center" }}>{monthName}</span>
+        <button onClick={()=>shift(1)} style={navBtn}>→</button>
+        <div style={{ flex:1 }} />
+        <span style={{ fontSize:12, color:C.sub, fontWeight:600 }}>Member</span>
+        <select value={member} onChange={(e)=>setMember(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px", fontSize:13, fontFamily:"inherit", background:"#fff", cursor:"pointer" }}>
+          {["All", ...team].map((m)=><option key={m} value={m}>{m}</option>)}
+        </select>
       </div>
-      <div style={{ display:"grid", gap:14 }}>
-        {Object.keys(groups).length===0 && <Empty>No posts scheduled.</Empty>}
-        {Object.entries(groups).map(([date,items])=>(
-          <div key={date}>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}><span style={{ fontFamily:"inherit", fontSize:18, fontWeight:600 }}>{date}</span><span style={{ fontSize:12, color:C.sub, fontWeight:700, background:"#EEF1F6", borderRadius:6, padding:"2px 8px" }}>{dow(date)}</span>{date===TODAY && <Pill bg={C.navy} fg="#fff">Today</Pill>}<div style={{ flex:1, height:1, background:C.line }} /></div>
-            <div style={{ display:"grid", gap:8 }}>
-              {items.map((r)=>{ const miss=isMissed(r); return (
-                <div key={r._id} style={{ display:"flex", alignItems:"center", gap:12, ...card(12), borderColor: miss ? "#F3C9CD" : C.line, background: miss ? "#FFF7F7" : "#fff" }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:C.navy, minWidth:64 }}>{r.time}</span>
-                  <div style={{ flex:1 }}><div style={{ fontSize:13.5, fontWeight:600 }}>{r.title}{r.fromPipeline && <span title="Linked from pipeline" style={{ color:C.sub, fontWeight:600 }}> ↩</span>}</div><div style={{ fontSize:11.5, color:C.sub, marginTop:2 }}>{r.platform} · {r.type} · {r.owner}</div></div>
-                  <BrandTag b={r.brand} />
-                  {miss ? <Pill bg="#F9D7D7" fg="#A11">Missed</Pill> : <StatusPill s={r.status} />}
-                  <div style={{ display:"flex" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div>
-                </div>
-              ); })}
-            </div>
+      {member!=="All" && (
+        <div style={{ ...card(13), marginBottom:14, display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+          {kpiBox(`${plannedWk(member)}/${weekTarget}`, "Planned this week", plannedWk(member)>=weekTarget?"#1FA463":C.red)}
+          {kpiBox(`${daysMet(member)}/7`, `Days hitting ${dailyPosts}/day`, daysMet(member)===7?"#1FA463":"#C98A00")}
+          <div style={{ flex:2, minWidth:200, fontSize:12, color:C.sub }}>{daysUnder(member).length===0 ? <span style={{ color:"#1FA463", fontWeight:700 }}>✓ Every day this week hits the target.</span> : <><b>Days under {dailyPosts} this week:</b> {daysUnder(member).map((d)=>d.slice(5)).join(", ")}</>}</div>
+        </div>
+      )}
+      {isAdmin && member==="All" && (
+        <div style={{ ...card(14), marginBottom:16 }}>
+          <SectionTitle icon={Shield}>Weekly posting KPI — {wkStart} → {wkEnd}</SectionTitle>
+          <div style={{ display:"grid", gap:8, marginTop:12 }}>
+            {team.map((t)=>{ const p=plannedWk(t); const dm=daysMet(t); const ok=p>=weekTarget; return (
+              <div key={t} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ width:90, fontSize:12.5, fontWeight:600 }}>{t}</span>
+                <div style={{ flex:1, height:6, background:"#EEF1F6", borderRadius:4, overflow:"hidden" }}><div style={{ width:`${Math.min(100,(p/weekTarget)*100)}%`, height:"100%", background:ok?"#1FA463":C.yellow }} /></div>
+                <span style={{ fontSize:12, fontWeight:700, color:ok?"#1FA463":C.red, width:56, textAlign:"right" }}>{p}/{weekTarget}</span>
+                <span style={{ fontSize:11.5, color:dm===7?"#1FA463":C.sub, width:96, textAlign:"right" }}>{dm}/7 days met</span>
+              </div>
+            ); })}
           </div>
-        ))}
+        </div>
+      )}
+      <div style={card(14)}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6 }}>
+          {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d)=>(<div key={d} style={{ fontSize:11, fontWeight:700, color:C.sub, textAlign:"center", paddingBottom:4 }}>{d}</div>))}
+          {cells.map((c,i)=> c ? (
+            <div key={i} onClick={()=>setPicker({ date:c.iso })} title="Click to schedule" style={{ minHeight:104, borderRadius:9, border:`1px solid ${c.iso===TODAY?C.navy:C.line}`, background:cellBg(c.items.length), padding:6, cursor:"pointer", overflow:"hidden" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                <span style={{ fontSize:11.5, fontWeight:700, color:C.sub }}>{c.d}</span>
+                {member!=="All" ? <span style={{ fontSize:10, fontWeight:800, color:c.items.length>=dailyPosts?"#15724A":C.red }}>{c.items.length}/{dailyPosts}</span> : (c.items.length>0 && <span style={{ fontSize:10, fontWeight:700, color:C.sub }}>{c.items.length}</span>)}
+              </div>
+              <div style={{ display:"grid", gap:3 }}>
+                {c.items.slice(0,3).map((r)=>(
+                  <div key={r._id} onClick={(e)=>{ e.stopPropagation(); onEdit(r); }} title={`${r.title} · ${r.owner}`} style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", border:`1px solid ${C.line}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
+                    <span style={{ width:7, height:7, borderRadius:2, background:BRAND_DOT[r.brand]||C.sub, flexShrink:0 }} />
+                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600 }}>{r.title||"(untitled)"}</span>
+                    <span onClick={(e)=>{ e.stopPropagation(); onDel(r._id); }} style={{ color:C.sub, cursor:"pointer", fontWeight:700 }}>×</span>
+                  </div>
+                ))}
+                {c.items.length>3 && <div style={{ fontSize:10, color:C.sub, fontWeight:600 }}>+{c.items.length-3} more</div>}
+              </div>
+            </div>
+          ) : <div key={i} />)}
+        </div>
+      </div>
+      {picker && <SchedulePicker approved={approved} presetDate={picker.date} onClose={()=>setPicker(null)} onConfirm={(ids,date,time)=>{ onSchedule(ids,date,time); setPicker(null); }} />}
+    </div>
+  );
+}
+
+function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
+  const [date, setDate] = useState(presetDate||"");
+  const [time, setTime] = useState("8:00 PM");
+  const [sel, setSel] = useState([]);
+  const toggle = (id)=>setSel((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]);
+  const canAdd = date && sel.length;
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:50, padding:16, backdropFilter:"blur(2px)" }}>
+      <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"min(560px,100%)", maxHeight:"86vh", overflow:"hidden", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(20,35,62,.28)" }}>
+        <div style={{ background:C.navy, padding:"16px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}><div style={{ color:"#fff", fontWeight:700, fontSize:15, display:"flex", alignItems:"center", gap:8 }}><CalendarDays size={17} color={C.yellow} />Schedule approved ideas</div><span style={{ cursor:"pointer" }} onClick={onClose}><X size={18} color="#9FB0CC" /></span></div>
+        <div style={{ padding:"14px 20px", display:"flex", gap:10, borderBottom:`1px solid ${C.line}` }}>
+          <div style={{ flex:1 }}><label style={{ fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 }}>Target date</label><input type="date" value={date} onChange={(e)=>setDate(e.target.value)} style={inp()} /></div>
+          <div style={{ width:130 }}><label style={{ fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 }}>Time</label><input value={time} onChange={(e)=>setTime(e.target.value)} style={inp()} /></div>
+        </div>
+        <div style={{ padding:14, overflowY:"auto", display:"grid", gap:8 }}>
+          {approved.length===0 && <Empty>No approved ideas yet. Approve ideas in the Idea Bank first.</Empty>}
+          {approved.map((i)=>{ const on=sel.includes(i._id); return (
+            <div key={i._id} onClick={()=>toggle(i._id)} style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 12px", border:`1.5px solid ${on?C.navy:C.line}`, borderRadius:11, cursor:"pointer", background:on?"#F3F6FC":"#fff" }}>
+              <span style={{ width:18, height:18, borderRadius:5, border:`2px solid ${on?C.navy:"#C7CFDD"}`, background:on?C.navy:"#fff", display:"grid", placeItems:"center", flexShrink:0, color:"#fff", fontSize:11, fontWeight:800 }}>{on?"✓":""}</span>
+              <div style={{ flex:1, minWidth:0 }}><div style={{ fontSize:13.5, fontWeight:700, lineHeight:1.3 }}>{i.title}</div><div style={{ fontSize:11.5, color:C.sub, marginTop:2 }}>{[i.type, i.category, i.by].filter(Boolean).join(" · ")}</div></div>
+              <BrandTag b={i.brand} />
+            </div>
+          ); })}
+        </div>
+        <div style={{ padding:"14px 20px", borderTop:`1px solid ${C.line}`, display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:12.5, color:C.sub }}>{sel.length} selected</span><div style={{ flex:1 }} />
+          <button onClick={onClose} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, padding:"9px 16px", borderRadius:9, fontWeight:600, cursor:"pointer", fontSize:13 }}>Cancel</button>
+          <button disabled={!canAdd} onClick={()=>onConfirm(sel,date,time)} style={{ border:"none", background:canAdd?C.navy:"#E6E9F0", color:canAdd?"#fff":"#A9B2C4", padding:"9px 18px", borderRadius:9, fontWeight:700, cursor:canAdd?"pointer":"default", fontSize:13 }}>Schedule {sel.length||""}</button>
+        </div>
       </div>
     </div>
   );
