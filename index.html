@@ -61,6 +61,7 @@ const ClipboardList = (p) => <Svg {...p}><rect x="8" y="2" width="8" height="4" 
 const Shield = (p) => <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></Svg>;
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></Svg>;
 const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></Svg>;
+const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -362,6 +363,11 @@ function App() {
   };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const approveIdea = (_id) => setStatus("ideas", _id, "Approved");
+  const duplicateIdea = (idea) => {
+    const copy = { ...idea, _id:uid(), code:nextCode(data.ideas,"I"), title:(idea.title||"")+" (copy)", status:"Backlog", dateAdded:nowISO(), by:(L.team.includes(myName)?myName:idea.by) };
+    persist({ ...data, ideas:[...data.ideas, copy] });
+    openEdit("ideas", copy);
+  };
   const scheduleIdeas = (ideaIds, date, time) => {
     let cal=[...data.calendar], ideas=[...data.ideas];
     ideaIds.forEach((id)=>{ const idea=data.ideas.find((i)=>i._id===id); if(!idea) return;
@@ -417,7 +423,7 @@ function App() {
 
         <div style={{ padding:24, flex:1 }}>
           {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
-          {tab==="ideas" && <Ideas rows={filt(data.ideas)} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} onApprove={approveIdea} />}
+          {tab==="ideas" && <Ideas rows={filt(data.ideas)} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} onApprove={approveIdea} onDuplicate={duplicateIdea} />}
           {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} pipelineStatus={L.pipelineStatus} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
           {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
@@ -497,7 +503,7 @@ function Dashboard({ data, setTab, myName }) {
   );
 }
 
-function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove }) {
+function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove, onDuplicate }) {
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
   const wkIdeas = (allIdeas||[]).filter((i)=>i.dateAdded && mondayOf(i.dateAdded)===THIS_MON);
   const mine = wkIdeas.filter((i)=>i.by===myName).length;
@@ -532,7 +538,7 @@ function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit,
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
         {rows.map((r,i)=>(
           <div key={r._id} style={{ ...card(14), animation:`rise .35s ${i*0.03}s both` }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={14} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
