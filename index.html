@@ -126,7 +126,7 @@ const SEED = {
     collabStatus:["Pitching","Negotiating","Contract Signed","In Production","Delivered","Invoiced","Paid","Completed","Dropped"],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
-    topics:["AI","Finance","Travel","Property","Lifestyle","Business"],
+    topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
     contentStatus:["Idea","Scripted","Filmed","Edited","Published"],
   },
   settings: { weeklyTarget: 4, ideasTarget: 20 },
@@ -166,7 +166,7 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["AI","Finance","Travel","Property","Lifestyle","Business"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -184,8 +184,8 @@ function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, sec
 const fieldSets = (L) => ({
   ideas: [
     { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"type", l:"Content Type", t:"select", o:L.types },
-    { k:"title", l:"Working Title", t:"text", full:1 }, { k:"hook", l:"Hook / Angle", t:"text", full:1 },
-    { k:"category", l:"Topic Category", t:"text" }, { k:"priority", l:"Priority", t:"select", o:L.priority },
+    { k:"title", l:"Working Title", t:"text", full:1 },
+    { k:"category", l:"Topic", t:"select", o:L.topics }, { k:"priority", l:"Priority", t:"select", o:L.priority },
     { k:"status", l:"Status", t:"select", o:L.ideaStatus }, { k:"by", l:"Submitted By", t:"select", o:L.team },
     { k:"dateAdded", l:"Date Added", t:"date" }, { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
@@ -337,10 +337,10 @@ function App() {
     persist({ ...data, pipeline, calendar });
   };
   const setWeeklyTarget = (n) => persist({ ...data, settings:{ ...data.settings, weeklyTarget: Math.max(0, Number(n)||0) } });
-  const promote = (idea) => { const row = withStamp({ _id:uid(), code:nextCode(data.pipeline,"C"), brand:idea.brand, type:idea.type, title:idea.title, platform:"Instagram", owner:idea.by, status:"Approved", notes:idea.hook, collab:"", draftDue:"", designDue:"", target:"", link:"" }, "Approved"); persist({ ...data, pipeline:[...data.pipeline,row] }); setTab("pipeline"); };
+  const promote = (idea) => { const row = withStamp({ _id:uid(), code:nextCode(data.pipeline,"C"), brand:idea.brand, type:idea.type, title:idea.title, platform:"Instagram", owner:idea.by, status:"Approved", notes:(idea.hook||idea.category||""), collab:"", draftDue:"", designDue:"", target:"", link:"" }, "Approved"); persist({ ...data, pipeline:[...data.pipeline,row] }); setTab("pipeline"); };
   const addIdeasToPipeline = (chosen) => {
     let rows=[...data.pipeline], ideas=[...data.ideas];
-    chosen.forEach((idea)=>{ rows.push(withStamp({ _id:uid(), code:nextCode(rows,"C"), brand:idea.brand, type:idea.type, title:idea.title, platform:"Instagram", owner:idea.by, status:"Approved", notes:idea.hook, collab:"", draftDue:"", designDue:"", target:"", link:"" }, "Approved")); ideas=ideas.map((i)=>(i._id===idea._id&&i.status==="Backlog"?{ ...i, status:"Approved" }:i)); });
+    chosen.forEach((idea)=>{ rows.push(withStamp({ _id:uid(), code:nextCode(rows,"C"), brand:idea.brand, type:idea.type, title:idea.title, platform:"Instagram", owner:idea.by, status:"Approved", notes:(idea.hook||idea.category||""), collab:"", draftDue:"", designDue:"", target:"", link:"" }, "Approved")); ideas=ideas.map((i)=>(i._id===idea._id&&i.status==="Backlog"?{ ...i, status:"Approved" }:i)); });
     persist({ ...data, pipeline:rows, ideas });
   };
 
@@ -410,7 +410,7 @@ function App() {
         <div style={{ padding:24, flex:1 }}>
           {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
           {tab==="ideas" && <Ideas rows={filt(data.ideas)} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} />}
-          {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
+          {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} pipelineStatus={L.pipelineStatus} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
           {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
           {tab==="calendar" && <Calendar rows={filt(data.calendar)} weeklyTarget={data.settings.weeklyTarget} onTarget={setWeeklyTarget} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} />}
@@ -498,7 +498,7 @@ function Ideas({ rows, onAdd, onEdit, onDel, onPromote }) {
           <div key={r._id} style={{ ...card(14), animation:`rise .35s ${i*0.03}s both` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2 }}><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
-            <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:32 }}>{r.hook}</div>
+            <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>{r.by}</span><span>{r.code} · {r.dateAdded}</span></div>
           </div>
@@ -509,13 +509,16 @@ function Ideas({ rows, onAdd, onEdit, onDel, onPromote }) {
   );
 }
 
-function Pipeline({ rows, ideas, pipelineAll, onAddFromIdeas, onAdd, onEdit, onDel, drag, setDrag, setStatus }) {
+function Pipeline({ rows, ideas, pipelineAll, onAddFromIdeas, onAdd, onEdit, onDel, drag, setDrag, setStatus, pipelineStatus }) {
   const [picker, setPicker] = useState(false);
+  const base = (pipelineStatus && pipelineStatus.length) ? pipelineStatus : PIPE_COLS;
+  const extra = [...new Set(rows.map((r)=>r.status))].filter((s)=>s && !base.includes(s));
+  const cols = [...base, ...extra];
   return (
     <div>
       <Toolbar title="Pipeline" sub="Drag cards between stages to update status" onAdd={onAdd} addLabel="New piece" onSecondary={()=>setPicker(true)} secondaryLabel="Add from ideas" secondaryIcon={Lightbulb} />
       <div style={{ display:"flex", gap:12, overflowX:"auto", paddingBottom:8 }}>
-        {PIPE_COLS.map((col)=>{ const items=rows.filter((r)=>r.status===col); const over=drag&&drag.over===col; return (
+        {cols.map((col)=>{ const items=rows.filter((r)=>r.status===col); const over=drag&&drag.over===col; return (
           <div key={col} onDragOver={(e)=>{ e.preventDefault(); if(drag) setDrag({ ...drag, over:col }); }} onDrop={()=>{ if(drag){ setStatus(drag.id,col); setDrag(null); } }} style={{ minWidth:210, width:210, background:over?"#EDF1F8":"#EFF1F6", borderRadius:12, padding:8, transition:"background .15s", border:over?`2px dashed ${C.navy2}`:"2px dashed transparent" }}>
             <div style={{ display:"flex", alignItems:"center", gap:7, padding:"4px 6px 10px" }}><span style={{ width:9, height:9, borderRadius:3, background:STATUS_TINT[col], border:`1px solid ${C.line}` }} /><span style={{ fontSize:12.5, fontWeight:700 }}>{col}</span><span style={{ fontSize:11, color:C.sub, marginLeft:"auto", background:"#fff", borderRadius:6, padding:"1px 7px" }}>{items.length}</span></div>
             <div style={{ display:"grid", gap:8, minHeight:30 }}>
@@ -692,7 +695,7 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", platforms:"Platforms", pipelineStatus:"Pipeline Status", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
