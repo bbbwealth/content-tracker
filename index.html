@@ -134,6 +134,7 @@ const SEED = {
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
     topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
+    ideaKind:["Organic","Collab"],
     contentStatus:["Idea","Scripted","Filmed","Edited","Published"],
   },
   settings: { weeklyTarget: 4, ideasTarget: 20, ideaQuota: 25, dailyPosts: 3 },
@@ -173,7 +174,7 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -191,8 +192,9 @@ function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, sec
 const fieldSets = (L) => ({
   ideas: [
     { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"type", l:"Content Type", t:"select", o:L.types },
+    { k:"kind", l:"Organic / Collab", t:"select", o:L.ideaKind }, { k:"category", l:"Topic", t:"select", o:L.topics },
     { k:"title", l:"Working Title", t:"text", full:1 },
-    { k:"category", l:"Topic", t:"select", o:L.topics }, { k:"priority", l:"Priority", t:"select", o:L.priority },
+    { k:"priority", l:"Priority", t:"select", o:L.priority },
     { k:"status", l:"Status", t:"select", o:L.ideaStatus }, { k:"by", l:"Submitted By", t:"select", o:L.team },
     { k:"dateAdded", l:"Date Added", t:"date" }, { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
@@ -202,6 +204,8 @@ const fieldSets = (L) => ({
     { k:"platform", l:"Platform", t:"select", o:L.platforms }, { k:"owner", l:"Owner", t:"select", o:L.team },
     { k:"status", l:"Status", t:"select", o:L.pipelineStatus }, { k:"collab", l:"Collab Partner", t:"text" },
     { k:"draftDue", l:"Draft Due", t:"date" }, { k:"designDue", l:"Design Due", t:"date" }, { k:"target", l:"Target Post Date", t:"date" },
+    { k:"scriptLink", l:"Script link", t:"text", full:1 }, { k:"footageLink", l:"Footage link", t:"text", full:1 }, { k:"contentLink", l:"Final content link", t:"text", full:1 },
+    { k:"adminComment", l:"Admin comment", t:"textarea", full:1, adminOnly:1 },
     { k:"notes", l:"Brief / Notes", t:"textarea", full:1 }, { k:"link", l:"Asset / Link", t:"text", full:1 },
   ],
   calendar: [
@@ -318,7 +322,7 @@ function App() {
 
   const openAdd = (entity) => {
     const blank = {}; fieldSets(L)[entity].forEach((f)=>(blank[f.k]=f.t==="number"?0:""));
-    if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; }
+    if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; blank.kind="Organic"; }
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
     if (entity==="collabs") blank.status="Pitching";
@@ -359,21 +363,27 @@ function App() {
   };
 
   // ── admin: enrol a new team member (creates their login via the secure Edge Function) ──
-  const enrolUser = async ({ name, email, password, role:newRole }) => {
+  const callAdminFn = async (body) => {
+    const { data: s } = await sb.auth.getSession();
+    const token = s.session && s.session.access_token;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-user`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "Authorization":`Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(()=>({}));
+    if (!res.ok) throw new Error(out.error || `Failed (${res.status})`);
+    return out;
+  };
+  const enrolUser = async ({ name, email, password, role:newRole, tabs }) => {
     try {
-      const { data: s } = await sb.auth.getSession();
-      const token = s.session && s.session.access_token;
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-user`, {
-        method: "POST",
-        headers: { "Content-Type":"application/json", "Authorization":`Bearer ${token}`, "apikey": SUPABASE_ANON_KEY },
-        body: JSON.stringify({ name, email, password, role: newRole }),
-      });
-      const out = await res.json().catch(()=>({}));
-      if (!res.ok) return { error: out.error || `Failed (${res.status})` };
+      await callAdminFn({ action:"create", name, email, password, role:newRole, tabs });
       if (name && !data.lists.team.includes(name)) persist({ ...data, lists:{ ...data.lists, team:[...data.lists.team, name] } });
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   };
+  const listMembers = () => callAdminFn({ action:"list" });
+  const removeMember = (id) => callAdminFn({ action:"delete", id });
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const approveIdea = (_id) => setStatus("ideas", _id, "Approved");
   const duplicateIdea = (idea) => {
@@ -396,6 +406,8 @@ function App() {
     { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
+  const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
+  const visibleNav = (!isAdmin && Array.isArray(allowedTabs)) ? NAV.filter((n)=>n.id==="dashboard" || allowedTabs.includes(n.id)) : NAV;
 
   const pageTitle = (NAV.find((n)=>n.id===tab) || {}).label || "Dashboard";
 
@@ -407,7 +419,7 @@ function App() {
           <div><div style={{ color:"#fff", fontWeight:700, fontSize:16, lineHeight:1 }}>Content Hub</div><div style={{ color:"#9FB0CC", fontSize:11, marginTop:3 }}>BBB Media Group</div></div>
         </div>
         <nav style={{ flex:1, overflowY:"auto", padding:"12px 12px" }}>
-          {NAV.map((n)=>{ const on=tab===n.id; const Icon=n.icon; return (
+          {visibleNav.map((n)=>{ const on=tab===n.id; const Icon=n.icon; return (
             <button key={n.id} onClick={()=>setTab(n.id)} style={{ width:"100%", border:"none", cursor:"pointer", textAlign:"left", background:on?C.navy2:"transparent", color:on?"#fff":"#8696B4", padding:"10px 12px", borderRadius:9, fontSize:13, fontWeight:600, display:"flex", alignItems:"center", gap:11, marginBottom:2, borderLeft:`3px solid ${on?C.yellow:"transparent"}` }} onMouseEnter={(e)=>{ if(!on) e.currentTarget.style.background="#1A2B49"; }} onMouseLeave={(e)=>{ if(!on) e.currentTarget.style.background="transparent"; }}><Icon size={17} />{n.label}</button>
           ); })}
         </nav>
@@ -445,11 +457,11 @@ function App() {
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
-          {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} />}
+          {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} />}
         </div>
       </main>
 
-      {modal && <Modal modal={modal} L={L} onClose={()=>setModal(null)} onSave={saveModal} />}
+      {modal && <Modal modal={modal} L={L} onClose={()=>setModal(null)} onSave={saveModal} isAdmin={isAdmin} />}
     </div>
   );
 }
@@ -555,7 +567,7 @@ function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit,
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={14} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>{r.by}</span><span>{r.code} · {r.dateAdded}</span></div>
           </div>
         ))}
@@ -583,6 +595,8 @@ function Pipeline({ rows, ideas, pipelineAll, onAddFromIdeas, onAdd, onEdit, onD
                   <div style={{ display:"flex", alignItems:"center", gap:5 }}><GripVertical size={13} /><BrandTag b={r.brand} /><div style={{ marginLeft:"auto", display:"flex" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={13} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={13} /></IconBtn></div></div>
                   <div style={{ fontSize:13, fontWeight:700, margin:"7px 0 5px", lineHeight:1.3 }}>{r.title}</div>
                   <div style={{ display:"flex", gap:5, flexWrap:"wrap", marginBottom:6 }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.collab && <Pill bg="#FBE9D9" fg="#9A5B16">★ {r.collab}</Pill>}</div>
+                  {(r.scriptLink||r.footageLink||r.contentLink) && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginBottom:6 }}>{[["Script",r.scriptLink],["Footage",r.footageLink],["Content",r.contentLink]].filter((x)=>x[1]).map((x)=>(<a key={x[0]} href={x[1]} target="_blank" rel="noreferrer" onClick={(e)=>e.stopPropagation()} onMouseDown={(e)=>e.stopPropagation()} style={{ fontSize:10, fontWeight:700, color:C.navy, background:"#EEF1F6", borderRadius:6, padding:"2px 6px", textDecoration:"none" }}>🔗 {x[0]}</a>))}</div>}
+                  {r.adminComment && <div style={{ fontSize:10.5, color:"#7a5b00", background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:7, padding:"4px 6px", marginBottom:6, lineHeight:1.4 }}>💬 {r.adminComment}</div>}
                   <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:6 }}><span>{r.owner}</span><span>{r.target || "—"}</span></div>
                 </div>
               ))}
@@ -825,7 +839,8 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
+const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["accounts","Accounts"],["pulse","Pulse"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
@@ -849,9 +864,9 @@ function AddInline({ onAdd }) {
   return (<div style={{ display:"flex", gap:6 }}><input value={v} onChange={(e)=>setV(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ onAdd(v); setV(""); } }} placeholder="Add…" style={{ flex:1, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 9px", fontSize:12, outline:"none" }} /><button onClick={()=>{ onAdd(v); setV(""); }} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:7, width:30, cursor:"pointer" }}>+</button></div>);
 }
 
-function Modal({ modal, L, onClose, onSave }) {
+function Modal({ modal, L, onClose, onSave, isAdmin }) {
   const [rec,setRec] = useState(modal.record);
-  const fields = fieldSets(L)[modal.entity];
+  const fields = fieldSets(L)[modal.entity].filter((f)=>!(f.adminOnly && !isAdmin));
   const title = { ideas:"Idea", pipeline:"Pipeline piece", calendar:"Calendar post", collabs:"Collab" }[modal.entity];
   const set = (k,v) => setRec((r)=>({ ...r, [k]:v }));
   return (
@@ -1016,19 +1031,25 @@ function Productivity({ rows, team }) {
 }
 
 /* ── admin panel: enrol team members (calls the secure Edge Function) ── */
-function AdminPanel({ data, onEnrol, myEmail }) {
+function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser }) {
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [pw,setPw]=useState(""); const [role,setRole]=useState("user");
+  const [tabs,setTabs]=useState(MEMBER_TABS.map((t)=>t[0]));
   const [busy,setBusy]=useState(false); const [msg,setMsg]=useState(null);
+  const [members,setMembers]=useState(null); const [mErr,setMErr]=useState("");
   const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
+  const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>setMembers(r.users||[])).catch((e)=>setMErr(String((e&&e.message)||e))); };
+  useEffect(()=>{ load(); }, []);
+  const toggleTab=(id)=>setTabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]);
   const submit = async (e)=>{ e.preventDefault(); setBusy(true); setMsg(null);
-    const res = await onEnrol({ name, email:email.trim(), password:pw, role });
+    const res = await onEnrol({ name, email:email.trim(), password:pw, role, tabs: role==="admin"?null:tabs });
     setBusy(false);
     if (res.error) setMsg({ ok:false, text:res.error });
-    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); }
+    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); load(); }
   };
+  const remove = async (u)=>{ const ok = window.confirm ? window.confirm(`Remove ${u.email}? They will lose access to Content Hub immediately.`) : true; if(!ok) return; try{ await onRemoveUser(u.id); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } };
   return (
     <div>
-      <Toolbar title="Admin" sub="Enrol team members and view the roster" />
+      <Toolbar title="Admin" sub="Enrol team members, set which tabs they can access, and manage logins" />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
         <div style={card(16)}>
           <SectionTitle icon={UserPlus}>Enrol a new team member</SectionTitle>
@@ -1037,22 +1058,41 @@ function AdminPanel({ data, onEnrol, myEmail }) {
             <div><label style={lbl}>Email</label><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required style={inp()} placeholder="name@company.com" /></div>
             <div><label style={lbl}>Temporary password</label><input value={pw} onChange={(e)=>setPw(e.target.value)} required minLength={6} style={inp()} placeholder="at least 6 characters" /></div>
             <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="admin">Admin</option></select></div>
+            {role==="user" && (
+              <div>
+                <label style={lbl}>Tabs this member can access</label>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                  {MEMBER_TABS.map((mt)=>{ const id=mt[0]; const label=mt[1]; const on=tabs.includes(id); const locked=id==="dashboard"; return (
+                    <button type="button" key={id} onClick={()=>{ if(!locked) toggleTab(id); }} style={{ border:`1.5px solid ${on?C.navy:C.line}`, background:on?"#F3F6FC":"#fff", color:on?C.navy:C.sub, borderRadius:8, padding:"5px 9px", fontSize:11.5, fontWeight:600, cursor:locked?"default":"pointer", opacity:locked?0.7:1 }}>{on?"✓ ":""}{label}</button>
+                  ); })}
+                </div>
+                <div style={{ fontSize:10.5, color:C.sub, marginTop:5 }}>Dashboard is always on. Admins see every tab.</div>
+              </div>
+            )}
             {msg && <div style={{ background:msg.ok?"#D6EFD6":"#FBE4E6", color:msg.ok?"#15724A":"#A11", fontSize:12, fontWeight:600, padding:"8px 10px", borderRadius:8 }}>{msg.text}</div>}
             <button type="submit" disabled={busy} style={{ border:"none", background:busy?"#9FB0CC":C.navy, color:"#fff", padding:"10px", borderRadius:10, fontWeight:700, fontSize:13.5, cursor:busy?"default":"pointer" }}>{busy?"Enrolling…":"Enrol member"}</button>
           </form>
-          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>They can log in immediately with this email + password. Ask them to change it after first login. Admins can also enrol other admins.</div>
+          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>They can log in immediately with this email + password. Ask them to change it after first login.</div>
         </div>
         <div style={card(16)}>
-          <SectionTitle icon={Shield}>Team roster</SectionTitle>
+          <SectionTitle icon={Shield}>Members & access</SectionTitle>
+          {mErr && <div style={{ background:"#FBE4E6", color:"#A11", fontSize:11.5, fontWeight:600, padding:"8px 10px", borderRadius:8, margin:"12px 0" }}>{mErr}</div>}
+          {members===null && !mErr && <div style={{ fontSize:12, color:C.sub, marginTop:12 }}>Loading members…</div>}
           <div style={{ display:"grid", gap:7, marginTop:12 }}>
-            {(data.lists.team||[]).filter((t)=>t!=="Unassigned").map((t)=>(
-              <div key={t} style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", border:`1px solid ${C.line}`, borderRadius:9 }}>
-                <span style={{ width:26, height:26, borderRadius:7, background:"#EEF1F6", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:C.navy }}>{(t||"?").slice(0,1).toUpperCase()}</span>
-                <span style={{ fontSize:13, fontWeight:600 }}>{t}</span>
+            {members && members.map((u)=>(
+              <div key={u.id} style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", border:`1px solid ${C.line}`, borderRadius:9 }}>
+                <span style={{ width:26, height:26, borderRadius:7, background:"#EEF1F6", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:C.navy, flexShrink:0 }}>{(u.name||u.email||"?").slice(0,1).toUpperCase()}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12.5, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.name||u.email}</div>
+                  <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
+                </div>
+                <Pill bg={u.role==="admin"?C.yellow:"#EEF1F6"} fg={u.role==="admin"?C.navy:C.sub}>{u.role==="admin"?"Admin":"Member"}</Pill>
+                {u.email!==myEmail ? <IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn> : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
               </div>
             ))}
+            {members && members.length===0 && <Empty>No members yet.</Empty>}
           </div>
-          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>This roster powers the Owner dropdowns and the weekly submission check. New enrolled members are added here automatically.</div>
+          <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>Removing a member deletes their login immediately. Owner-dropdown names are managed in Lists → Team / Owner.</div>
         </div>
       </div>
     </div>
