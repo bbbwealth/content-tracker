@@ -62,6 +62,7 @@ const Shield = (p) => <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></Svg>;
 const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></Svg>;
 const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>;
+const AtSign = (p) => <Svg {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -115,6 +116,11 @@ const SEED = {
     { week:"2026-06-29", owner:"Madeleine", type:"Reel", topic:"Travel", title:"穷游槟城三天两夜", status:"Idea", notes:"", stamps:{} },
     { week:"2026-06-29", owner:"Mark", type:"Carousel", topic:"AI", title:"AI 会取代的 5 个工作", status:"Idea", notes:"", stamps:{} },
   ]),
+  accounts: seedRows([
+    { platform:"Instagram", handle:"@bbbwealth", brand:"BBBwealth", manager:"Hubert", createdDevice:"Office iPhone 13 (SIM +60 12-xxx)", loginDevice:"Hubert MacBook, Office iPhone 13", notes:"Main brand account · 2FA on office phone" },
+    { platform:"TikTok", handle:"@madwithmoney", brand:"Madwithmoney", manager:"Madeleine", createdDevice:"Madeleine iPhone 14", loginDevice:"Madeleine iPhone 14", notes:"" },
+    { platform:"小红书 (RED)", handle:"KL Money 官方", brand:"KL Money", manager:"Serene", createdDevice:"Office Android tablet", loginDevice:"Serene laptop", notes:"" },
+  ]),
   lists: {
     brands:["BBBwealth","KL Money","Madwithmoney"],
     types:["Reel","Carousel","Pic + Commentary","Long Video"],
@@ -167,7 +173,7 @@ const syncCalendar = (calendar, item, status) => {
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -211,6 +217,13 @@ const fieldSets = (L) => ({
     { k:"title", l:"Content Idea / Title", t:"text", full:1 },
     { k:"week", l:"Week (Mon)", t:"date" },
     { k:"notes", l:"Notes / Hook", t:"textarea", full:1 },
+  ],
+  accounts: [
+    { k:"platform", l:"Platform", t:"select", o:L.platforms }, { k:"handle", l:"Account / Handle", t:"text" },
+    { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"manager", l:"Account Manager", t:"select", o:L.team },
+    { k:"createdDevice", l:"Created on (device)", t:"text", full:1 },
+    { k:"loginDevice", l:"Currently logged in on (device)", t:"text", full:1 },
+    { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
   collabs: [
     { k:"partner", l:"Partner / Client", t:"text", full:1 },
@@ -380,7 +393,7 @@ function App() {
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
     { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Content Tracker", icon:ClipboardList },
     { id:"productivity", label:"Productivity", icon:BarChart3 }, { id:"calendar", label:"Calendar", icon:CalendarDays },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
 
@@ -429,6 +442,7 @@ function App() {
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
           {tab==="calendar" && <Calendar rows={data.calendar} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} onSchedule={scheduleIdeas} />}
           {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
+        {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
           {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} />}
@@ -1041,6 +1055,41 @@ function AdminPanel({ data, onEnrol, myEmail }) {
           <div style={{ fontSize:11, color:C.sub, marginTop:10, lineHeight:1.5 }}>This roster powers the Owner dropdowns and the weekly submission check. New enrolled members are added here automatically.</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── account management (social accounts + managers + devices) ── */
+function Accounts({ rows, onAdd, onEdit, onDel }) {
+  const th = { textAlign:"left", fontSize:11, fontWeight:700, color:C.sub, padding:"10px 12px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".3px" };
+  const td = { fontSize:12.5, padding:"11px 12px", borderBottom:`1px solid ${C.line}`, verticalAlign:"top" };
+  return (
+    <div>
+      <Toolbar title="Account Management" sub={`${rows.length} social account${rows.length===1?"":"s"} — who manages each and the devices used to create / log in`} onAdd={onAdd} addLabel="New account" />
+      {rows.length===0 ? <Empty>No accounts yet. Click "New account" to record your first social account.</Empty> : (
+        <div style={{ ...card(0), overflow:"hidden" }}>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
+              <thead><tr>
+                <th style={th}>Platform</th><th style={th}>Account / Handle</th><th style={th}>Brand</th><th style={th}>Manager</th><th style={th}>Created on</th><th style={th}>Logged in on</th><th style={{ ...th, textAlign:"right" }}></th>
+              </tr></thead>
+              <tbody>
+                {rows.map((r)=>(
+                  <tr key={r._id}>
+                    <td style={td}><Pill bg="#EEF1F6" fg={C.sub}>{r.platform||"—"}</Pill></td>
+                    <td style={{ ...td, fontWeight:700 }}>{r.handle||"—"}{r.notes && <div style={{ fontSize:11, color:C.sub, fontWeight:400, marginTop:3, maxWidth:220, whiteSpace:"normal" }}>{r.notes}</div>}</td>
+                    <td style={td}>{r.brand ? <BrandTag b={r.brand} /> : "—"}</td>
+                    <td style={{ ...td, fontWeight:600 }}>{r.manager||"—"}</td>
+                    <td style={{ ...td, color:C.sub }}>{r.createdDevice||"—"}</td>
+                    <td style={{ ...td, color:C.sub }}>{r.loginDevice||"—"}</td>
+                    <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
