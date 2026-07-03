@@ -194,6 +194,7 @@ const fieldSets = (L) => ({
     { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"type", l:"Content Type", t:"select", o:L.types },
     { k:"kind", l:"Organic / Collab", t:"select", o:L.ideaKind }, { k:"category", l:"Topic", t:"select", o:L.topics },
     { k:"title", l:"Working Title", t:"text", full:1 },
+    { k:"crossPost", l:"Cross-post to (other brands)", t:"multiselect", o:L.brands, full:1 },
     { k:"priority", l:"Priority", t:"select", o:L.priority },
     { k:"status", l:"Status", t:"select", o:L.ideaStatus }, { k:"by", l:"Submitted By", t:"select", o:L.team },
     { k:"dateAdded", l:"Date Added", t:"date" }, { k:"notes", l:"Notes", t:"textarea", full:1 },
@@ -223,8 +224,9 @@ const fieldSets = (L) => ({
     { k:"notes", l:"Notes / Hook", t:"textarea", full:1 },
   ],
   accounts: [
-    { k:"platform", l:"Platform", t:"select", o:L.platforms }, { k:"handle", l:"Account / Handle", t:"text" },
-    { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"manager", l:"Account Manager", t:"select", o:L.team },
+    { k:"platform", l:"Platform", t:"select", o:L.platforms }, { k:"brand", l:"Brand", t:"select", o:L.brands },
+    { k:"manager", l:"Account Manager", t:"select", o:L.team },
+    { k:"logo", l:"Brand logo", t:"image", full:1 },
     { k:"createdDevice", l:"Created on (device)", t:"text", full:1 },
     { k:"loginDevice", l:"Currently logged in on (device)", t:"text", full:1 },
     { k:"notes", l:"Notes", t:"textarea", full:1 },
@@ -321,7 +323,7 @@ function App() {
   const filt = (rows) => rows.filter((r) => matchBrand(r) && matchQuery(r));
 
   const openAdd = (entity) => {
-    const blank = {}; fieldSets(L)[entity].forEach((f)=>(blank[f.k]=f.t==="number"?0:""));
+    const blank = {}; fieldSets(L)[entity].forEach((f)=>(blank[f.k]=f.t==="number"?0:f.t==="multiselect"?[]:""));
     if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; blank.kind="Organic"; }
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
@@ -384,6 +386,7 @@ function App() {
   };
   const listMembers = () => callAdminFn({ action:"list" });
   const removeMember = (id) => callAdminFn({ action:"delete", id });
+  const updateMember = ({ id, role, tabs }) => callAdminFn({ action:"update", id, role, tabs });
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const approveIdea = (_id) => setStatus("ideas", _id, "Approved");
   const duplicateIdea = (idea) => {
@@ -457,7 +460,7 @@ function App() {
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
-          {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} />}
+          {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
         </div>
       </main>
 
@@ -531,6 +534,7 @@ function Dashboard({ data, setTab, myName }) {
 
 function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove, onDuplicate }) {
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
+  const [fBy,setFBy]=useState(""); const [fApproval,setFApproval]=useState(""); const [sortBy,setSortBy]=useState("newest");
   const wkIdeas = (allIdeas||[]).filter((i)=>i.dateAdded && mondayOf(i.dateAdded)===THIS_MON);
   const mine = wkIdeas.filter((i)=>i.by===myName).length;
   const countFor = (t)=>wkIdeas.filter((i)=>i.by===t).length;
@@ -544,6 +548,14 @@ function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit,
       <span style={{ fontSize:12, fontWeight:700, color:ok?"#1FA463":C.red, width:52, textAlign:"right" }}>{c}/{quota}</span>
     </div>
   ); };
+  let view = (rows||[]).slice();
+  if (fBy) view = view.filter((r)=>r.by===fBy);
+  if (fApproval==="approved") view = view.filter((r)=>r.status && r.status!=="Backlog");
+  else if (fApproval==="pending") view = view.filter((r)=>r.status==="Backlog");
+  if (sortBy==="newest") view.sort((a,b)=>String(b.dateAdded||"").localeCompare(String(a.dateAdded||"")));
+  else if (sortBy==="oldest") view.sort((a,b)=>String(a.dateAdded||"").localeCompare(String(b.dateAdded||"")));
+  else if (sortBy==="byPerson") view.sort((a,b)=>String(a.by||"").localeCompare(String(b.by||"")));
+  const ctrlSel = { ...inp(), width:"auto", minWidth:150, padding:"8px 10px", fontSize:12.5 };
   return (
     <div>
       <Toolbar title="Idea Bank" sub={`Every member submits ≥ ${quota} ideas/week. Admin approves them, then they can be scheduled on the Calendar.`} onAdd={onAdd} addLabel="New idea" />
@@ -561,18 +573,27 @@ function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit,
           <div style={{ display:"grid", gap:8 }}>{team.map((t)=>barRow(t))}</div>
         </div>
       )}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:14 }}>
+        <span style={{ fontSize:11.5, fontWeight:700, color:C.sub }}>Sort & filter:</span>
+        <select value={fBy} onChange={(e)=>setFBy(e.target.value)} style={ctrlSel}><option value="">All submitters</option>{team.map((t)=><option key={t} value={t}>{t}</option>)}</select>
+        <select value={fApproval} onChange={(e)=>setFApproval(e.target.value)} style={ctrlSel}><option value="">All statuses</option><option value="approved">Approved</option><option value="pending">Pending approval</option></select>
+        <select value={sortBy} onChange={(e)=>setSortBy(e.target.value)} style={ctrlSel}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="byPerson">By submitter (A–Z)</option></select>
+        {(fBy||fApproval||sortBy!=="newest") && <button onClick={()=>{ setFBy(""); setFApproval(""); setSortBy("newest"); }} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"7px 11px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Reset</button>}
+        <span style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginLeft:"auto" }}>{view.length} of {(rows||[]).length} shown</span>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
-        {rows.map((r,i)=>(
+        {view.map((r,i)=>(
           <div key={r._id} style={{ ...card(14), animation:`rise .35s ${i*0.03}s both` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={14} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
+            {Array.isArray(r.crossPost) && r.crossPost.length>0 && <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}><span style={{ fontSize:11, fontWeight:700, color:C.sub }}>↗ Cross-post:</span>{r.crossPost.map((b)=><Pill key={b} bg="#FFF3CC" fg="#7a5b00">{b}</Pill>)}</div>}
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>{r.by}</span><span>{r.code} · {r.dateAdded}</span></div>
           </div>
         ))}
       </div>
-      {rows.length===0 && <Empty>No ideas match your filter.</Empty>}
+      {view.length===0 && <Empty>No ideas match your filter.</Empty>}
     </div>
   );
 }
@@ -864,10 +885,32 @@ function AddInline({ onAdd }) {
   return (<div style={{ display:"flex", gap:6 }}><input value={v} onChange={(e)=>setV(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ onAdd(v); setV(""); } }} placeholder="Add…" style={{ flex:1, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 9px", fontSize:12, outline:"none" }} /><button onClick={()=>{ onAdd(v); setV(""); }} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:7, width:30, cursor:"pointer" }}>+</button></div>);
 }
 
+// resize an uploaded image to a small square-ish logo and return a data URL (keeps the shared DB light)
+function fileToLogoDataURL(file, max=220) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > max) { h = Math.round(h * max / w); w = max; } }
+        else { if (h > max) { w = Math.round(w * max / h); h = max; } }
+        const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+        cv.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL("image/png"));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function Modal({ modal, L, onClose, onSave, isAdmin }) {
   const [rec,setRec] = useState(modal.record);
   const fields = fieldSets(L)[modal.entity].filter((f)=>!(f.adminOnly && !isAdmin));
-  const title = { ideas:"Idea", pipeline:"Pipeline piece", calendar:"Calendar post", collabs:"Collab" }[modal.entity];
+  const title = { ideas:"Idea", pipeline:"Pipeline piece", calendar:"Calendar post", collabs:"Collab", accounts:"Account" }[modal.entity];
   const set = (k,v) => setRec((r)=>({ ...r, [k]:v }));
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:50, padding:16, backdropFilter:"blur(2px)" }}>
@@ -878,6 +921,24 @@ function Modal({ modal, L, onClose, onSave, isAdmin }) {
             <div key={f.k} style={{ gridColumn:f.full?"1 / -1":"auto" }}>
               <label style={{ fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 }}>{f.l}</label>
               {f.t==="select" ? (<select value={rec[f.k]||""} onChange={(e)=>set(f.k,e.target.value)} style={inp()}><option value="">—</option>{f.o.map((o)=><option key={o} value={o}>{o}</option>)}</select>)
+              : f.t==="image" ? (
+                <div>
+                  {rec[f.k] ? (
+                    <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+                      <img src={rec[f.k]} alt="" style={{ height:56, width:56, borderRadius:10, objectFit:"cover", border:`1px solid ${C.line}`, background:"#fff" }} />
+                      <button type="button" onClick={()=>set(f.k,"")} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"6px 10px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Remove</button>
+                    </div>
+                  ) : null}
+                  <input type="file" accept="image/*" onChange={async (e)=>{ const file = e.target.files && e.target.files[0]; if (file) { try { const url = await fileToLogoDataURL(file); set(f.k, url); } catch (err) { alert("Sorry, couldn't read that image. Try a PNG or JPG."); } } if (e.target) e.target.value=""; }} style={{ fontSize:12.5 }} />
+                  <div style={{ fontSize:11, color:C.sub, marginTop:5 }}>PNG or JPG — auto-resized. Appears in the accounts table.</div>
+                </div>)
+              : f.t==="multiselect" ? (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {(f.o||[]).map((o)=>{ const arr=Array.isArray(rec[f.k])?rec[f.k]:[]; const sel=arr.includes(o); return (
+                    <button type="button" key={o} onClick={()=>set(f.k, sel?arr.filter((x)=>x!==o):[...arr,o])} style={{ border:`1px solid ${sel?C.navy:C.line}`, background:sel?C.navy:"#fff", color:sel?"#fff":C.sub, borderRadius:999, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer" }}>{sel?"✓ ":""}{o}</button>
+                  ); })}
+                  {(!f.o||f.o.length===0) && <span style={{ fontSize:12, color:C.sub }}>No brands in your Lists yet.</span>}
+                </div>)
               : f.t==="textarea" ? (<textarea value={rec[f.k]||""} onChange={(e)=>set(f.k,e.target.value)} rows={2} style={{ ...inp(), resize:"vertical" }} />)
               : (<input type={f.t==="number"?"number":f.t==="date"?"date":"text"} value={rec[f.k]==null?"":rec[f.k]} onChange={(e)=>set(f.k, f.t==="number"?Number(e.target.value):e.target.value)} style={inp()} />)}
             </div>
@@ -1031,11 +1092,12 @@ function Productivity({ rows, team }) {
 }
 
 /* ── admin panel: enrol team members (calls the secure Edge Function) ── */
-function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser }) {
+function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdateUser }) {
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [pw,setPw]=useState(""); const [role,setRole]=useState("user");
   const [tabs,setTabs]=useState(MEMBER_TABS.map((t)=>t[0]));
   const [busy,setBusy]=useState(false); const [msg,setMsg]=useState(null);
   const [members,setMembers]=useState(null); const [mErr,setMErr]=useState("");
+  const [editId,setEditId]=useState(null); const [eRole,setERole]=useState("user"); const [eTabs,setETabs]=useState([]); const [eBusy,setEBusy]=useState(false);
   const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
   const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>setMembers(r.users||[])).catch((e)=>setMErr(String((e&&e.message)||e))); };
   useEffect(()=>{ load(); }, []);
@@ -1047,6 +1109,9 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser }) {
     else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); load(); }
   };
   const remove = async (u)=>{ const ok = window.confirm ? window.confirm(`Remove ${u.email}? They will lose access to Content Hub immediately.`) : true; if(!ok) return; try{ await onRemoveUser(u.id); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } };
+  const startEdit = (u)=>{ setEditId(u.id); setERole(u.role||"user"); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); };
+  const toggleETab = (id)=>{ if(id==="dashboard") return; setETabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]); };
+  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, role:eRole, tabs: eRole==="admin"?null:eTabs }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
   return (
     <div>
       <Toolbar title="Admin" sub="Enrol team members, set which tabs they can access, and manage logins" />
@@ -1080,14 +1145,37 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser }) {
           {members===null && !mErr && <div style={{ fontSize:12, color:C.sub, marginTop:12 }}>Loading members…</div>}
           <div style={{ display:"grid", gap:7, marginTop:12 }}>
             {members && members.map((u)=>(
-              <div key={u.id} style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px", border:`1px solid ${C.line}`, borderRadius:9 }}>
-                <span style={{ width:26, height:26, borderRadius:7, background:"#EEF1F6", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:C.navy, flexShrink:0 }}>{(u.name||u.email||"?").slice(0,1).toUpperCase()}</span>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:12.5, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.name||u.email}</div>
-                  <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
+              <div key={u.id} style={{ border:`1px solid ${C.line}`, borderRadius:9, overflow:"hidden" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 10px" }}>
+                  <span style={{ width:26, height:26, borderRadius:7, background:"#EEF1F6", display:"grid", placeItems:"center", fontSize:12, fontWeight:800, color:C.navy, flexShrink:0 }}>{(u.name||u.email||"?").slice(0,1).toUpperCase()}</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.name||u.email}</div>
+                    <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
+                  </div>
+                  <Pill bg={u.role==="admin"?C.yellow:"#EEF1F6"} fg={u.role==="admin"?C.navy:C.sub}>{u.role==="admin"?"Admin":"Member"}</Pill>
+                  {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
                 </div>
-                <Pill bg={u.role==="admin"?C.yellow:"#EEF1F6"} fg={u.role==="admin"?C.navy:C.sub}>{u.role==="admin"?"Admin":"Member"}</Pill>
-                {u.email!==myEmail ? <IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn> : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
+                {editId===u.id && (
+                  <div style={{ borderTop:`1px solid ${C.line}`, padding:"10px 12px", background:"#FAFBFD" }}>
+                    <label style={lbl}>Role</label>
+                    <select value={eRole} onChange={(e)=>setERole(e.target.value)} style={{ ...inp(), marginBottom:10 }}><option value="user">Member</option><option value="admin">Admin</option></select>
+                    {eRole==="user" && (
+                      <div style={{ marginBottom:10 }}>
+                        <label style={lbl}>Tabs this member can access</label>
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
+                          {MEMBER_TABS.map((mt)=>{ const id=mt[0]; const on=eTabs.includes(id); const locked=id==="dashboard"; return (
+                            <button type="button" key={id} onClick={()=>toggleETab(id)} style={{ border:`1.5px solid ${on?C.navy:C.line}`, background:on?"#F3F6FC":"#fff", color:on?C.navy:C.sub, borderRadius:8, padding:"5px 9px", fontSize:11.5, fontWeight:600, cursor:locked?"default":"pointer", opacity:locked?0.7:1 }}>{on?"✓ ":""}{mt[1]}</button>
+                          ); })}
+                        </div>
+                        <div style={{ fontSize:10.5, color:C.sub, marginTop:5 }}>Dashboard is always on.</div>
+                      </div>
+                    )}
+                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                      <button onClick={()=>setEditId(null)} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer" }}>Cancel</button>
+                      <button onClick={()=>saveEdit(u)} disabled={eBusy} style={{ border:"none", background:eBusy?"#9FB0CC":C.navy, color:"#fff", borderRadius:8, padding:"7px 15px", fontSize:12.5, fontWeight:700, cursor:eBusy?"default":"pointer" }}>{eBusy?"Saving…":"Save access"}</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {members && members.length===0 && <Empty>No members yet.</Empty>}
@@ -1111,13 +1199,13 @@ function Accounts({ rows, onAdd, onEdit, onDel }) {
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", minWidth:860 }}>
               <thead><tr>
-                <th style={th}>Platform</th><th style={th}>Account / Handle</th><th style={th}>Brand</th><th style={th}>Manager</th><th style={th}>Created on</th><th style={th}>Logged in on</th><th style={{ ...th, textAlign:"right" }}></th>
+                <th style={th}>Platform</th><th style={th}>Brand logo</th><th style={th}>Brand</th><th style={th}>Manager</th><th style={th}>Created on</th><th style={th}>Logged in on</th><th style={{ ...th, textAlign:"right" }}></th>
               </tr></thead>
               <tbody>
                 {rows.map((r)=>(
                   <tr key={r._id}>
                     <td style={td}><Pill bg="#EEF1F6" fg={C.sub}>{r.platform||"—"}</Pill></td>
-                    <td style={{ ...td, fontWeight:700 }}>{r.handle||"—"}{r.notes && <div style={{ fontSize:11, color:C.sub, fontWeight:400, marginTop:3, maxWidth:220, whiteSpace:"normal" }}>{r.notes}</div>}</td>
+                    <td style={td}>{r.logo ? <img src={r.logo} alt="" style={{ height:38, width:38, borderRadius:8, objectFit:"cover", border:`1px solid ${C.line}`, background:"#fff", display:"block" }} /> : <div style={{ height:38, width:38, borderRadius:8, background:"#EEF1F6", display:"grid", placeItems:"center", color:C.sub, fontSize:9, fontWeight:700, letterSpacing:".3px" }}>LOGO</div>}{r.notes && <div style={{ fontSize:11, color:C.sub, fontWeight:400, marginTop:5, maxWidth:220, whiteSpace:"normal" }}>{r.notes}</div>}</td>
                     <td style={td}>{r.brand ? <BrandTag b={r.brand} /> : "—"}</td>
                     <td style={{ ...td, fontWeight:600 }}>{r.manager||"—"}</td>
                     <td style={{ ...td, color:C.sub }}>{r.createdDevice||"—"}</td>
