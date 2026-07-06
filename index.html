@@ -65,6 +65,7 @@ const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/
 const AtSign = (p) => <Svg {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></Svg>;
 const Megaphone = (p) => <Svg {...p}><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></Svg>;
 const Share2 = (p) => <Svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5"/></Svg>;
+const FolderIcon = (p) => <Svg {...p}><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -426,7 +427,7 @@ function App() {
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
     { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Content Tracker", icon:ClipboardList },
     { id:"productivity", label:"Productivity", icon:BarChart3 }, { id:"calendar", label:"Calendar", icon:CalendarDays },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"decks", label:"Collab Decks", icon:FolderIcon }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
@@ -476,7 +477,8 @@ function App() {
           {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
           {tab==="calendar" && <Calendar rows={data.calendar} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} onSchedule={scheduleIdeas} onStatus={(id,s)=>setStatus("calendar",id,s)} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
+          {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
+          {tab==="decks" && <CollabDecks decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
@@ -553,6 +555,9 @@ function Dashboard({ data, setTab, myName }) {
   );
 }
 
+// idea approval is binary: Backlog = pending, anything else = approved
+function ApprovalTag({ r }) { const ok = r.status && r.status !== "Backlog"; return <Pill bg={ok?"#DCF0E4":"#FFF3CC"} fg={ok?"#15724A":"#8a6d1a"}>{ok?"Approved":"Pending approval"}</Pill>; }
+
 // commits a text edit on blur / Enter (avoids a DB write per keystroke)
 function InlineText({ value, onCommit, style, placeholder }) {
   const [v,setV] = useState(value==null?"":value);
@@ -621,8 +626,9 @@ function Ideas({ rows, allIdeas, allTeam, lists, isAdmin, myName, quota, onAdd, 
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={14} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}<StatusPill s={r.status} /></div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}<ApprovalTag r={r} /></div>
             {Array.isArray(r.crossPost) && r.crossPost.length>0 && <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}><span style={{ fontSize:11, fontWeight:700, color:C.sub }}>↗ Cross-post:</span>{r.crossPost.map((b)=><Pill key={b} bg="#FFF3CC" fg="#7a5b00">{b}</Pill>)}</div>}
+            {r.notes && <div style={{ fontSize:12, color:C.sub, lineHeight:1.45, marginBottom:8, background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", display:"flex", gap:6 }}><span>📝</span><span style={{ flex:1, whiteSpace:"pre-wrap" }}>{r.notes}</span></div>}
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>{r.by}</span><span>{r.code} · {r.dateAdded}</span></div>
           </div>
         ))}
@@ -642,10 +648,10 @@ function Ideas({ rows, allIdeas, allTeam, lists, isAdmin, myName, quota, onAdd, 
                   <td style={td}>{cellSel(r,"type",L.types)}</td>
                   <td style={td}>{cellSel(r,"kind",L.ideaKind)}</td>
                   <td style={td}>{cellSel(r,"category",L.topics)}</td>
-                  <td style={{ ...td, minWidth:220 }}><InlineText value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Working title…" style={{ width:"100%", border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12.5, fontFamily:"inherit" }} /></td>
+                  <td style={{ ...td, minWidth:220 }}><InlineText value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Working title…" style={{ width:"100%", border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12.5, fontFamily:"inherit" }} />{r.notes && <div title={r.notes} style={{ fontSize:11, color:C.sub, marginTop:4, maxWidth:240, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", cursor:"help" }}>📝 {r.notes}</div>}</td>
                   <td style={td}>{Array.isArray(r.crossPost)&&r.crossPost.length>0 ? <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{r.crossPost.map((b)=><Pill key={b} bg="#FFF3CC" fg="#7a5b00">{b}</Pill>)}</div> : <span style={{ color:C.sub }}>—</span>}</td>
                   <td style={{ ...td, color:C.sub, whiteSpace:"nowrap" }}>{r.by||"—"}</td>
-                  <td style={td}><div style={{ display:"flex", alignItems:"center", gap:6 }}><StatusPill s={r.status} />{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓</button>}</div></td>
+                  <td style={td}>{isAdmin ? (<select value={(r.status&&r.status!=="Backlog")?"Approved":"Pending"} onChange={(e)=>onPatch(r._id,{status:e.target.value==="Approved"?"Approved":"Backlog"})} style={{ border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 7px", fontSize:12, fontFamily:"inherit", background:"#fff", cursor:"pointer" }}><option value="Pending">Pending approval</option><option value="Approved">Approved</option></select>) : <ApprovalTag r={r} />}</td>
                   <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}><IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={13} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={14} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={13} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={13} /></IconBtn></td>
                 </tr>
               ))}
@@ -844,7 +850,7 @@ function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
   );
 }
 
-function Collabs({ rows, decks, brands, isAdmin, onSaveDeck, onAdd, onEdit, onDel }) {
+function Collabs({ rows, onAdd, onEdit, onDel }) {
   const [sort, setSort] = useState("default");
   const sorted = useMemo(()=>{ const a=[...rows]; const num=(x)=>Number(x)||0;
     if (sort==="feeDesc") a.sort((x,y)=>num(y.fee)-num(x.fee));
@@ -861,31 +867,6 @@ function Collabs({ rows, decks, brands, isAdmin, onSaveDeck, onAdd, onEdit, onDe
   return (
     <div>
       <Toolbar title="Collabs & Partners" sub={`${rows.length} deals · RM ${fees.toLocaleString()} logged`} onAdd={onAdd} addLabel="New collab" />
-      <div style={{ ...card(16), marginBottom:16 }}>
-        <SectionTitle icon={Briefcase}>Collab decks / media kits</SectionTitle>
-        <div style={{ fontSize:11.5, color:C.sub, margin:"6px 0 12px" }}>One media kit per brand — paste a link (Canva / Drive / PDF) or upload a file. Use these when pitching partners.</div>
-        <div style={{ display:"grid", gap:8 }}>
-          {(brands||[]).map((b)=>{ const d=(decks&&decks[b])||{}; return (
-            <div key={b} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                <BrandTag b={b} />
-                <div style={{ flex:1 }} />
-                {d.link && <a href={d.link} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, fontWeight:700, color:"#2D6CDF" }}>Open link →</a>}
-                {d.file && <button onClick={()=>openDataUrl(d.file)} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Open file</button>}
-                {!d.link && !d.file && <span style={{ fontSize:12, color:C.sub }}>No deck yet</span>}
-              </div>
-              {isAdmin && (
-                <div style={{ display:"flex", gap:8, marginTop:9, flexWrap:"wrap", alignItems:"center" }}>
-                  <InlineText value={d.link} onCommit={(v)=>onSaveDeck(b,{ ...d, link:v })} placeholder="Paste deck link (Canva / Drive / PDF URL)…" style={{ flex:1, minWidth:220, border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", fontSize:12.5, fontFamily:"inherit" }} />
-                  <label style={{ fontSize:12, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 11px" }}>{d.fileName?"Replace file":"Upload file"}<input type="file" accept="application/pdf,image/*" onChange={async (e)=>{ const f=e.target.files&&e.target.files[0]; if(f){ if(f.size>2*1024*1024){ alert("That file is over 2MB. For big decks, paste a link instead to keep the app fast."); } else { try{ const du=await fileToDataURL(f); onSaveDeck(b,{ ...d, file:du, fileName:f.name }); }catch(err){ alert("Couldn't read that file."); } } } if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label>
-                  {d.fileName && <span style={{ fontSize:11.5, color:C.sub }}>📎 {d.fileName}<span onClick={()=>onSaveDeck(b,{ ...d, file:"", fileName:"" })} title="Remove file" style={{ color:C.red, cursor:"pointer", fontWeight:800, marginLeft:6 }}>×</span></span>}
-                </div>
-              )}
-            </div>
-          ); })}
-          {(!brands||brands.length===0) && <div style={{ fontSize:12, color:C.sub }}>Add brands in Lists to attach decks.</div>}
-        </div>
-      </div>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
         <span style={{ fontSize:12, color:C.sub, fontWeight:600 }}>Sort by</span>
         <select value={sort} onChange={(e)=>setSort(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", cursor:"pointer" }}>
@@ -902,6 +883,68 @@ function Collabs({ rows, decks, brands, isAdmin, onSaveDeck, onAdd, onEdit, onDe
         ))}
       </div>
       {rows.length===0 && <Empty>No collabs match your filter.</Empty>}
+    </div>
+  );
+}
+
+/* ── collab decks (media kit per brand, file upload only) ── */
+function CollabDecks({ decks, brands, isAdmin, onSaveDeck }) {
+  const [view, setView] = useState("cards");
+  const list = brands || [];
+  const upload = async (b, f) => {
+    if (!f) return;
+    if (f.size > 2*1024*1024) { alert("That file is over 2MB. Compress it (or split it) to keep the app fast."); return; }
+    try { const du = await fileToDataURL(f); onSaveDeck(b, { file:du, fileName:f.name }); } catch (e) { alert("Sorry, couldn't read that file."); }
+  };
+  const uploadInput = (b, label) => (
+    <label style={{ fontSize:12, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:8, padding:"6px 11px", display:"inline-block" }}>{label}
+      <input type="file" accept="application/pdf,image/*" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; upload(b,f); if(e.target) e.target.value=""; }} style={{ display:"none" }} />
+    </label>
+  );
+  const openBtn = (d) => <button onClick={()=>openDataUrl(d.file)} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Open</button>;
+  const removeBtn = (b) => isAdmin ? <button onClick={()=>onSaveDeck(b,{ file:"", fileName:"" })} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.red, borderRadius:8, padding:"6px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Remove</button> : null;
+  return (
+    <div>
+      <Toolbar title="Collab Decks" sub="Media kit per brand — upload a file to share with partners during pitches" />
+      <div style={{ display:"flex", alignItems:"center", marginBottom:14 }}>
+        <div style={{ marginLeft:"auto", display:"flex", background:"#F1F3F8", borderRadius:8, padding:3 }}>
+          {[["cards","Cards"],["list","List"]].map((o)=>(<button key={o[0]} onClick={()=>setView(o[0])} style={{ border:"none", cursor:"pointer", borderRadius:6, padding:"5px 13px", fontSize:12, fontWeight:700, background:view===o[0]?"#fff":"transparent", color:view===o[0]?C.navy:C.sub, boxShadow:view===o[0]?"0 1px 2px rgba(20,35,62,.12)":"none" }}>{o[1]}</button>))}
+        </div>
+      </div>
+      {list.length===0 ? <Empty>Add brands in Lists to attach decks.</Empty> : view==="cards" ? (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))", gap:12 }}>
+          {list.map((b)=>{ const d=(decks&&decks[b])||{}; return (
+            <div key={b} style={card(16)}>
+              <BrandTag b={b} />
+              <div style={{ marginTop:14 }}>
+                {d.file ? (
+                  <div>
+                    <div style={{ fontSize:12.5, color:C.sub, marginBottom:10, display:"flex", gap:6, alignItems:"center" }}><span>📎</span><span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.fileName}>{d.fileName}</span></div>
+                    <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>{openBtn(d)}{isAdmin && uploadInput(b,"Replace")}{removeBtn(b)}</div>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}><span style={{ fontSize:12.5, color:C.sub }}>No deck uploaded yet.</span>{isAdmin ? uploadInput(b,"Upload file") : null}</div>
+                )}
+              </div>
+            </div>
+          ); })}
+        </div>
+      ) : (
+        <div style={{ ...card(0), overflow:"hidden" }}><div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:560 }}>
+            <thead><tr><th style={{ textAlign:"left", fontSize:11, fontWeight:700, color:C.sub, padding:"10px 12px", borderBottom:`1px solid ${C.line}`, textTransform:"uppercase", letterSpacing:".3px" }}>Brand</th><th style={{ textAlign:"left", fontSize:11, fontWeight:700, color:C.sub, padding:"10px 12px", borderBottom:`1px solid ${C.line}`, textTransform:"uppercase", letterSpacing:".3px" }}>Deck file</th><th style={{ textAlign:"right", padding:"10px 12px", borderBottom:`1px solid ${C.line}` }}></th></tr></thead>
+            <tbody>
+              {list.map((b)=>{ const d=(decks&&decks[b])||{}; return (
+                <tr key={b}>
+                  <td style={{ padding:"10px 12px", borderBottom:`1px solid ${C.line}` }}><BrandTag b={b} /></td>
+                  <td style={{ padding:"10px 12px", borderBottom:`1px solid ${C.line}`, fontSize:12.5, color:C.sub }}>{d.file ? <span title={d.fileName}>📎 {d.fileName}</span> : <span>No deck yet</span>}</td>
+                  <td style={{ padding:"10px 12px", borderBottom:`1px solid ${C.line}`, textAlign:"right" }}><div style={{ display:"flex", gap:8, justifyContent:"flex-end", flexWrap:"wrap" }}>{d.file && openBtn(d)}{isAdmin && uploadInput(b, d.file?"Replace":"Upload")}{d.file && removeBtn(b)}</div></td>
+                </tr>
+              ); })}
+            </tbody>
+          </table>
+        </div></div>
+      )}
     </div>
   );
 }
@@ -947,7 +990,7 @@ function Pulse({ data }) {
 }
 
 const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
-const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["pulse","Pulse"],["settings","Lists"]];
+const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["decks","Collab Decks"],["accounts","Accounts"],["hiring","Hiring"],["pulse","Pulse"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
