@@ -63,6 +63,8 @@ const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0
 const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></Svg>;
 const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>;
 const AtSign = (p) => <Svg {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></Svg>;
+const Megaphone = (p) => <Svg {...p}><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></Svg>;
+const Share2 = (p) => <Svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -75,6 +77,8 @@ const COLLAB_TYPE = {
   "Campaign (One-Off Paid)": { short:"Campaign", bg:"#DCE8FB", fg:"#1E3F86" },
   "Partnership (Long-Term / Retainer)": { short:"Partnership", bg:"#EAE2FB", fg:"#4B2E9E" },
 };
+const EMPLOYMENT_TYPES = ["Full time","Part time"];
+const CONTENT_ROLES = ["Talent","Social Media","Editor","Business Development"];
 
 /* ── seed ── */
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -121,6 +125,10 @@ const SEED = {
     { platform:"TikTok", handle:"@madwithmoney", brand:"Madwithmoney", manager:"Madeleine", createdDevice:"Madeleine iPhone 14", loginDevice:"Madeleine iPhone 14", notes:"" },
     { platform:"小红书 (RED)", handle:"KL Money 官方", brand:"KL Money", manager:"Serene", createdDevice:"Office Android tablet", loginDevice:"Serene laptop", notes:"" },
   ]),
+  hiring: seedRows([
+    { title:"Short-Video Editor (CapCut/Premiere)", brand:"BBBwealth", employment:"Full time", location:"KL / Hybrid", applyLink:"", desc:"Edit 8–12 finance short videos a week. Fast turnaround, hook-first storytelling, Mandarin + English subtitles." },
+  ]),
+  collabDecks: {},
   lists: {
     brands:["BBBwealth","KL Money","Madwithmoney"],
     types:["Reel","Carousel","Pic + Commentary","Long Video"],
@@ -170,11 +178,13 @@ const withStamp = (item, status) => { const stamps = { ...(item.stamps || {}) };
 const syncCalendar = (calendar, item, status) => {
   const date = item.target || nowISO();
   const idx = calendar.findIndex((c) => c.fromPipeline === item._id || (c.title === item.title && c.brand === item.brand));
-  const base = { fromPipeline: item._id, date, time: (idx >= 0 && calendar[idx].time) || "8:00 PM", brand: item.brand, platform: item.platform || "Instagram", type: item.type, title: item.title, owner: item.owner, status, caption: item.notes || "", link: item.link || "" };
+  const finalStatus = (idx >= 0 && calendar[idx].status === "Posted") ? "Posted" : status; // never downgrade a posted item on re-sync
+  const base = { fromPipeline: item._id, date, time: (idx >= 0 && calendar[idx].time) || "8:00 PM", brand: item.brand, platform: item.platform || "Instagram", type: item.type, title: item.title, owner: item.owner, status: finalStatus, caption: item.notes || "", link: item.link || "" };
   if (idx >= 0) { const next = [...calendar]; next[idx] = { ...next[idx], ...base }; return next; }
   return [...calendar, { _id: uid(), ...base }];
 };
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; return d; };
+const calStatusForPipe = (it) => it.status === "Posted" ? "Posted" : (it.status === "Scheduled" ? "Scheduled" : "Planned");
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -195,9 +205,7 @@ const fieldSets = (L) => ({
     { k:"kind", l:"Organic / Collab", t:"select", o:L.ideaKind }, { k:"category", l:"Topic", t:"select", o:L.topics },
     { k:"title", l:"Working Title", t:"text", full:1 },
     { k:"crossPost", l:"Cross-post to (other brands)", t:"multiselect", o:L.brands, full:1 },
-    { k:"priority", l:"Priority", t:"select", o:L.priority },
-    { k:"status", l:"Status", t:"select", o:L.ideaStatus }, { k:"by", l:"Submitted By", t:"select", o:L.team },
-    { k:"dateAdded", l:"Date Added", t:"date" }, { k:"notes", l:"Notes", t:"textarea", full:1 },
+    { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
   pipeline: [
     { k:"brand", l:"Brand", t:"select", o:L.brands }, { k:"type", l:"Content Type", t:"select", o:L.types },
@@ -230,6 +238,12 @@ const fieldSets = (L) => ({
     { k:"createdDevice", l:"Created on (device)", t:"text", full:1 },
     { k:"loginDevice", l:"Currently logged in on (device)", t:"text", full:1 },
     { k:"notes", l:"Notes", t:"textarea", full:1 },
+  ],
+  hiring: [
+    { k:"title", l:"Job title", t:"text", full:1 },
+    { k:"brand", l:"Brand / Channel", t:"select", o:L.brands }, { k:"employment", l:"Employment", t:"select", o:EMPLOYMENT_TYPES },
+    { k:"location", l:"Location", t:"text" }, { k:"applyLink", l:"Apply link / form URL", t:"text" },
+    { k:"desc", l:"Description", t:"textarea", full:1 },
   ],
   collabs: [
     { k:"partner", l:"Partner / Client", t:"text", full:1 },
@@ -324,10 +338,11 @@ function App() {
 
   const openAdd = (entity) => {
     const blank = {}; fieldSets(L)[entity].forEach((f)=>(blank[f.k]=f.t==="number"?0:f.t==="multiselect"?[]:""));
-    if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; blank.kind="Organic"; }
+    if (entity==="ideas") { blank.dateAdded=nowISO(); blank.status="Backlog"; blank.priority="Medium"; blank.kind="Organic"; blank.by=myName; }
     if (entity==="pipeline") blank.status="Approved";
     if (entity==="calendar") blank.status="Planned";
     if (entity==="collabs") blank.status="Pitching";
+    if (entity==="hiring") blank.employment="Full time";
     if (entity==="weeklyPlans") { blank.status="Idea"; blank.week=THIS_MON; blank.owner = L.team.includes(myName) ? myName : ""; }
     setModal({ entity, mode:"add", record:blank });
   };
@@ -339,21 +354,26 @@ function App() {
       if (entity==="pipeline") row = withStamp(row, row.status);
       if (entity==="weeklyPlans") row = stampContent(row);
       rows.push(row);
-      if (entity==="pipeline" && (row.status==="Scheduled" || row.status==="Posted")) extra.calendar = syncCalendar(data.calendar, row, row.status);
+      if (entity==="pipeline" && (row.target || row.status==="Scheduled" || row.status==="Posted")) extra.calendar = syncCalendar(data.calendar, row, calStatusForPipe(row));
     } else {
       let saved = { ...rec }; if (entity==="pipeline") saved = withStamp(saved, saved.status);
       rows = rows.map((r)=>(r._id===rec._id ? saved : r));
-      if (entity==="pipeline" && (saved.status==="Scheduled" || saved.status==="Posted")) extra.calendar = syncCalendar(data.calendar, saved, saved.status);
+      if (entity==="pipeline") {
+        if (saved.target || saved.status==="Scheduled" || saved.status==="Posted") extra.calendar = syncCalendar(data.calendar, saved, calStatusForPipe(saved));
+        else extra.calendar = data.calendar.filter((c)=>c.fromPipeline!==saved._id); // target cleared → drop the linked calendar entry
+      }
     }
     persist({ ...data, [entity]:rows, ...extra }); setModal(null);
   };
   const del = (entity,_id) => persist({ ...data, [entity]:data[entity].filter((r)=>r._id!==_id) });
+  const patchIdea = (id, patch) => persist({ ...data, ideas: data.ideas.map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
+  const saveDeck = (brand, deck) => persist({ ...data, collabDecks: { ...(data.collabDecks||{}), [brand]: deck } });
   const setStatus = (entity,_id,status) => persist({ ...data, [entity]:data[entity].map((r)=>(r._id===_id?{ ...r, status }:r)) });
   const setPipelineStatus = (_id, status) => {
     const pipeline = data.pipeline.map((r)=>(r._id===_id ? withStamp(r, status) : r));
     const item = pipeline.find((r)=>r._id===_id);
     let calendar = data.calendar;
-    if (status==="Scheduled" || status==="Posted") calendar = syncCalendar(calendar, item, status);
+    if (item.target || status==="Scheduled" || status==="Posted") calendar = syncCalendar(calendar, item, calStatusForPipe(item));
     persist({ ...data, pipeline, calendar });
   };
   const setWeeklyTarget = (n) => persist({ ...data, settings:{ ...data.settings, weeklyTarget: Math.max(0, Number(n)||0) } });
@@ -377,16 +397,16 @@ function App() {
     if (!res.ok) throw new Error(out.error || `Failed (${res.status})`);
     return out;
   };
-  const enrolUser = async ({ name, email, password, role:newRole, tabs }) => {
+  const enrolUser = async ({ name, email, password, role:newRole, tabs, contentRoles, employment }) => {
     try {
-      await callAdminFn({ action:"create", name, email, password, role:newRole, tabs });
+      await callAdminFn({ action:"create", name, email, password, role:newRole, tabs, contentRoles, employment });
       if (name && !data.lists.team.includes(name)) persist({ ...data, lists:{ ...data.lists, team:[...data.lists.team, name] } });
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   };
   const listMembers = () => callAdminFn({ action:"list" });
   const removeMember = (id) => callAdminFn({ action:"delete", id });
-  const updateMember = ({ id, role, tabs }) => callAdminFn({ action:"update", id, role, tabs });
+  const updateMember = ({ id, role, tabs, contentRoles, employment }) => callAdminFn({ action:"update", id, role, tabs, contentRoles, employment });
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const approveIdea = (_id) => setStatus("ideas", _id, "Approved");
   const duplicateIdea = (idea) => {
@@ -406,7 +426,7 @@ function App() {
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
     { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Content Tracker", icon:ClipboardList },
     { id:"productivity", label:"Productivity", icon:BarChart3 }, { id:"calendar", label:"Calendar", icon:CalendarDays },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
@@ -451,13 +471,14 @@ function App() {
 
         <div style={{ padding:24, flex:1 }}>
           {tab==="dashboard" && <Dashboard data={data} setTab={setTab} myName={myName} />}
-          {tab==="ideas" && <Ideas rows={filt(data.ideas)} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} onApprove={approveIdea} onDuplicate={duplicateIdea} />}
+          {tab==="ideas" && <Ideas rows={filt(data.ideas)} allIdeas={data.ideas} allTeam={L.team} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("ideas")} onEdit={(r)=>openEdit("ideas",r)} onDel={(id)=>del("ideas",id)} onPromote={promote} onApprove={approveIdea} onDuplicate={duplicateIdea} onPatch={patchIdea} />}
           {tab==="pipeline" && <Pipeline rows={filt(data.pipeline)} ideas={data.ideas} pipelineAll={data.pipeline} pipelineStatus={L.pipelineStatus} onAddFromIdeas={addIdeasToPipeline} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} drag={drag} setDrag={setDrag} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
           {tab==="weekly" && <ContentTracker rows={filt(data.weeklyPlans)} allTeam={L.team} isAdmin={isAdmin} myName={myName} target={data.settings.ideasTarget} onAdd={()=>openAdd("weeklyPlans")} onEdit={(r)=>openEdit("weeklyPlans",r)} onDel={(id)=>del("weeklyPlans",id)} setStatus={setWeeklyStatus} />}
           {tab==="productivity" && <Productivity rows={data.weeklyPlans} team={L.team} />}
-          {tab==="calendar" && <Calendar rows={data.calendar} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} onSchedule={scheduleIdeas} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
+          {tab==="calendar" && <Calendar rows={data.calendar} allIdeas={data.ideas} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} onAdd={()=>openAdd("calendar")} onEdit={(r)=>openEdit("calendar",r)} onDel={(id)=>del("calendar",id)} onSchedule={scheduleIdeas} onStatus={(id,s)=>setStatus("calendar",id,s)} />}
+          {tab==="collabs" && <Collabs rows={filt(data.collabs)} decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
+          {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
           {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
@@ -532,9 +553,17 @@ function Dashboard({ data, setTab, myName }) {
   );
 }
 
-function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove, onDuplicate }) {
+// commits a text edit on blur / Enter (avoids a DB write per keystroke)
+function InlineText({ value, onCommit, style, placeholder }) {
+  const [v,setV] = useState(value==null?"":value);
+  useEffect(()=>{ setV(value==null?"":value); }, [value]);
+  return <input value={v} placeholder={placeholder||""} onChange={(e)=>setV(e.target.value)} onBlur={()=>{ if(v!==(value==null?"":value)) onCommit(v); }} onKeyDown={(e)=>{ if(e.key==="Enter") e.target.blur(); }} style={style} />;
+}
+
+function Ideas({ rows, allIdeas, allTeam, lists, isAdmin, myName, quota, onAdd, onEdit, onDel, onPromote, onApprove, onDuplicate, onPatch }) {
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
-  const [fBy,setFBy]=useState(""); const [fApproval,setFApproval]=useState(""); const [sortBy,setSortBy]=useState("newest");
+  const L = lists || {};
+  const [fBy,setFBy]=useState(""); const [fApproval,setFApproval]=useState(""); const [sortBy,setSortBy]=useState("newest"); const [viewMode,setViewMode]=useState("cards");
   const wkIdeas = (allIdeas||[]).filter((i)=>i.dateAdded && mondayOf(i.dateAdded)===THIS_MON);
   const mine = wkIdeas.filter((i)=>i.by===myName).length;
   const countFor = (t)=>wkIdeas.filter((i)=>i.by===t).length;
@@ -579,20 +608,51 @@ function Ideas({ rows, allIdeas, allTeam, isAdmin, myName, quota, onAdd, onEdit,
         <select value={fApproval} onChange={(e)=>setFApproval(e.target.value)} style={ctrlSel}><option value="">All statuses</option><option value="approved">Approved</option><option value="pending">Pending approval</option></select>
         <select value={sortBy} onChange={(e)=>setSortBy(e.target.value)} style={ctrlSel}><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="byPerson">By submitter (A–Z)</option></select>
         {(fBy||fApproval||sortBy!=="newest") && <button onClick={()=>{ setFBy(""); setFApproval(""); setSortBy("newest"); }} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"7px 11px", fontSize:12, fontWeight:600, cursor:"pointer" }}>Reset</button>}
-        <span style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginLeft:"auto" }}>{view.length} of {(rows||[]).length} shown</span>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
+          <div style={{ display:"flex", background:"#F1F3F8", borderRadius:8, padding:3 }}>
+            {[["cards","Cards"],["list","List"]].map((o)=>(<button key={o[0]} onClick={()=>setViewMode(o[0])} style={{ border:"none", cursor:"pointer", borderRadius:6, padding:"5px 13px", fontSize:12, fontWeight:700, background:viewMode===o[0]?"#fff":"transparent", color:viewMode===o[0]?C.navy:C.sub, boxShadow:viewMode===o[0]?"0 1px 2px rgba(20,35,62,.12)":"none" }}>{o[1]}</button>))}
+          </div>
+          <span style={{ fontSize:11.5, color:C.sub, fontWeight:600 }}>{view.length} of {(rows||[]).length} shown</span>
+        </div>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
+      {viewMode==="cards" && <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
         {view.map((r,i)=>(
           <div key={r._id} style={{ ...card(14), animation:`rise .35s ${i*0.03}s both` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}><BrandTag b={r.brand} /><div style={{ display:"flex", gap:2, alignItems:"center" }}>{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓ Approve</button>}<IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={14} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={15} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
             <div style={{ fontSize:15, fontWeight:700, margin:"8px 0 4px", lineHeight:1.3 }}>{r.title}</div>
             <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.4, minHeight:20 }}>{r.category ? ("🏷 " + r.category) : ""}</div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}{r.priority && <Pill bg={PRIORITY[r.priority] && PRIORITY[r.priority].bg} fg={PRIORITY[r.priority] && PRIORITY[r.priority].fg}>{r.priority}</Pill>}<StatusPill s={r.status} /></div>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap", margin:"10px 0", alignItems:"center" }}><Pill bg="#EEF1F6" fg={C.sub}>{r.type}</Pill>{r.kind && <Pill bg={r.kind==="Collab"?"#EAE2FB":"#DCF0E4"} fg={r.kind==="Collab"?"#4B2E9E":"#15724A"}>{r.kind}</Pill>}<StatusPill s={r.status} /></div>
             {Array.isArray(r.crossPost) && r.crossPost.length>0 && <div style={{ display:"flex", gap:5, flexWrap:"wrap", alignItems:"center", marginBottom:8 }}><span style={{ fontSize:11, fontWeight:700, color:C.sub }}>↗ Cross-post:</span>{r.crossPost.map((b)=><Pill key={b} bg="#FFF3CC" fg="#7a5b00">{b}</Pill>)}</div>}
             <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>{r.by}</span><span>{r.code} · {r.dateAdded}</span></div>
           </div>
         ))}
-      </div>
+      </div>}
+      {viewMode==="list" && view.length>0 && (()=>{
+        const th = { textAlign:"left", fontSize:11, fontWeight:700, color:C.sub, padding:"9px 10px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".3px" };
+        const td = { padding:"7px 10px", borderBottom:`1px solid ${C.line}`, verticalAlign:"middle", fontSize:12.5 };
+        const cellSel = (r,k,opts)=>(<select value={r[k]||""} onChange={(e)=>onPatch(r._id,{[k]:e.target.value})} style={{ border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 7px", fontSize:12, fontFamily:"inherit", background:"#fff", cursor:"pointer", maxWidth:150 }}><option value="">—</option>{(opts||[]).map((o)=><option key={o} value={o}>{o}</option>)}</select>);
+        return (
+        <div style={{ ...card(0), overflow:"hidden" }}><div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1040 }}>
+            <thead><tr><th style={th}>Brand</th><th style={th}>Type</th><th style={th}>Organic/Collab</th><th style={th}>Topic</th><th style={th}>Working Title</th><th style={th}>Cross-post</th><th style={th}>Submitter</th><th style={th}>Status</th><th style={{ ...th, textAlign:"right" }}></th></tr></thead>
+            <tbody>
+              {view.map((r)=>(
+                <tr key={r._id}>
+                  <td style={td}>{cellSel(r,"brand",L.brands)}</td>
+                  <td style={td}>{cellSel(r,"type",L.types)}</td>
+                  <td style={td}>{cellSel(r,"kind",L.ideaKind)}</td>
+                  <td style={td}>{cellSel(r,"category",L.topics)}</td>
+                  <td style={{ ...td, minWidth:220 }}><InlineText value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Working title…" style={{ width:"100%", border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12.5, fontFamily:"inherit" }} /></td>
+                  <td style={td}>{Array.isArray(r.crossPost)&&r.crossPost.length>0 ? <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>{r.crossPost.map((b)=><Pill key={b} bg="#FFF3CC" fg="#7a5b00">{b}</Pill>)}</div> : <span style={{ color:C.sub }}>—</span>}</td>
+                  <td style={{ ...td, color:C.sub, whiteSpace:"nowrap" }}>{r.by||"—"}</td>
+                  <td style={td}><div style={{ display:"flex", alignItems:"center", gap:6 }}><StatusPill s={r.status} />{isAdmin && r.status==="Backlog" && <button onClick={()=>onApprove(r._id)} style={{ border:"none", background:"#DCF0E4", color:"#15724A", fontWeight:700, fontSize:11, padding:"3px 8px", borderRadius:7, cursor:"pointer" }}>✓</button>}</div></td>
+                  <td style={{ ...td, textAlign:"right", whiteSpace:"nowrap" }}><IconBtn title="Duplicate & edit" onClick={()=>onDuplicate(r)}><Copy size={13} /></IconBtn><IconBtn title="Promote to pipeline" onClick={()=>onPromote(r)}><ArrowRight size={14} /></IconBtn><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={13} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={13} /></IconBtn></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div></div>
+        ); })()}
       {view.length===0 && <Empty>No ideas match your filter.</Empty>}
     </div>
   );
@@ -659,7 +719,7 @@ function IdeaPicker({ ideas, pipelineAll, onClose, onConfirm }) {
   );
 }
 
-function Calendar({ rows, allIdeas, allTeam, isAdmin, myName, dailyPosts, onAdd, onEdit, onDel, onSchedule }) {
+function Calendar({ rows, allIdeas, allTeam, isAdmin, myName, dailyPosts, onAdd, onEdit, onDel, onSchedule, onStatus }) {
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
   const [member, setMember] = useState(isAdmin ? "All" : (team.includes(myName) ? myName : "All"));
   const now = new Date();
@@ -688,7 +748,7 @@ function Calendar({ rows, allIdeas, allTeam, isAdmin, myName, dailyPosts, onAdd,
   const kpiBox=(v,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontFamily:"inherit", fontSize:24, fontWeight:700, lineHeight:1, color:c||C.ink }}>{v}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:5 }}>{l}</div></div>);
   return (
     <div>
-      <Toolbar title="Posting Calendar" sub={`Plan ${dailyPosts} posts every day. Click a day to schedule approved ideas.`} onAdd={()=>setPicker({ date:"" })} addLabel="Add from approved" onSecondary={onAdd} secondaryLabel="Manual post" secondaryIcon={Plus} />
+      <Toolbar title="Posting Calendar" sub={`Plan ${dailyPosts} posts every day. Click a day to schedule.${isAdmin?" Tap ✓ on a post to mark it posted.":""}`} onAdd={()=>setPicker({ date:"" })} addLabel="Add from approved" onSecondary={onAdd} secondaryLabel="Manual post" secondaryIcon={Plus} />
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
         <button onClick={()=>shift(-1)} style={navBtn}>←</button>
         <span style={{ fontFamily:"inherit", fontSize:18, fontWeight:700, minWidth:160, textAlign:"center" }}>{monthName}</span>
@@ -731,13 +791,14 @@ function Calendar({ rows, allIdeas, allTeam, isAdmin, myName, dailyPosts, onAdd,
                 {member!=="All" ? <span style={{ fontSize:10, fontWeight:800, color:c.items.length>=dailyPosts?"#15724A":C.red }}>{c.items.length}/{dailyPosts}</span> : (c.items.length>0 && <span style={{ fontSize:10, fontWeight:700, color:C.sub }}>{c.items.length}</span>)}
               </div>
               <div style={{ display:"grid", gap:3 }}>
-                {c.items.slice(0,3).map((r)=>(
-                  <div key={r._id} onClick={(e)=>{ e.stopPropagation(); onEdit(r); }} title={`${r.title} · ${r.owner}`} style={{ display:"flex", alignItems:"center", gap:4, background:"#fff", border:`1px solid ${C.line}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
+                {c.items.slice(0,3).map((r)=>{ const posted=r.status==="Posted"; return (
+                  <div key={r._id} onClick={(e)=>{ e.stopPropagation(); onEdit(r); }} title={`${r.title} · ${r.owner}${r.status?` · ${r.status}`:""}`} style={{ display:"flex", alignItems:"center", gap:4, background:posted?"#DCF0E4":"#fff", border:`1px solid ${posted?"#8FD3AC":C.line}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
                     <span style={{ width:7, height:7, borderRadius:2, background:BRAND_DOT[r.brand]||C.sub, flexShrink:0 }} />
-                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600 }}>{r.title||"(untitled)"}</span>
+                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:posted?"#15724A":"inherit", textDecoration:posted?"line-through":"none" }}>{r.title||"(untitled)"}</span>
+                    {isAdmin && onStatus && <span onClick={(e)=>{ e.stopPropagation(); onStatus(r._id, posted?"Planned":"Posted"); }} title={posted?"Mark as not posted":"Mark as posted"} style={{ cursor:"pointer", fontWeight:800, color:posted?"#15724A":"#B7C0D0", flexShrink:0, fontSize:12 }}>✓</span>}
                     <span onClick={(e)=>{ e.stopPropagation(); onDel(r._id); }} style={{ color:C.sub, cursor:"pointer", fontWeight:700 }}>×</span>
                   </div>
-                ))}
+                ); })}
                 {c.items.length>3 && <div style={{ fontSize:10, color:C.sub, fontWeight:600 }}>+{c.items.length-3} more</div>}
               </div>
             </div>
@@ -783,7 +844,7 @@ function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
   );
 }
 
-function Collabs({ rows, onAdd, onEdit, onDel }) {
+function Collabs({ rows, decks, brands, isAdmin, onSaveDeck, onAdd, onEdit, onDel }) {
   const [sort, setSort] = useState("default");
   const sorted = useMemo(()=>{ const a=[...rows]; const num=(x)=>Number(x)||0;
     if (sort==="feeDesc") a.sort((x,y)=>num(y.fee)-num(x.fee));
@@ -800,6 +861,31 @@ function Collabs({ rows, onAdd, onEdit, onDel }) {
   return (
     <div>
       <Toolbar title="Collabs & Partners" sub={`${rows.length} deals · RM ${fees.toLocaleString()} logged`} onAdd={onAdd} addLabel="New collab" />
+      <div style={{ ...card(16), marginBottom:16 }}>
+        <SectionTitle icon={Briefcase}>Collab decks / media kits</SectionTitle>
+        <div style={{ fontSize:11.5, color:C.sub, margin:"6px 0 12px" }}>One media kit per brand — paste a link (Canva / Drive / PDF) or upload a file. Use these when pitching partners.</div>
+        <div style={{ display:"grid", gap:8 }}>
+          {(brands||[]).map((b)=>{ const d=(decks&&decks[b])||{}; return (
+            <div key={b} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                <BrandTag b={b} />
+                <div style={{ flex:1 }} />
+                {d.link && <a href={d.link} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, fontWeight:700, color:"#2D6CDF" }}>Open link →</a>}
+                {d.file && <button onClick={()=>openDataUrl(d.file)} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.navy, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Open file</button>}
+                {!d.link && !d.file && <span style={{ fontSize:12, color:C.sub }}>No deck yet</span>}
+              </div>
+              {isAdmin && (
+                <div style={{ display:"flex", gap:8, marginTop:9, flexWrap:"wrap", alignItems:"center" }}>
+                  <InlineText value={d.link} onCommit={(v)=>onSaveDeck(b,{ ...d, link:v })} placeholder="Paste deck link (Canva / Drive / PDF URL)…" style={{ flex:1, minWidth:220, border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", fontSize:12.5, fontFamily:"inherit" }} />
+                  <label style={{ fontSize:12, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 11px" }}>{d.fileName?"Replace file":"Upload file"}<input type="file" accept="application/pdf,image/*" onChange={async (e)=>{ const f=e.target.files&&e.target.files[0]; if(f){ if(f.size>2*1024*1024){ alert("That file is over 2MB. For big decks, paste a link instead to keep the app fast."); } else { try{ const du=await fileToDataURL(f); onSaveDeck(b,{ ...d, file:du, fileName:f.name }); }catch(err){ alert("Couldn't read that file."); } } } if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label>
+                  {d.fileName && <span style={{ fontSize:11.5, color:C.sub }}>📎 {d.fileName}<span onClick={()=>onSaveDeck(b,{ ...d, file:"", fileName:"" })} title="Remove file" style={{ color:C.red, cursor:"pointer", fontWeight:800, marginLeft:6 }}>×</span></span>}
+                </div>
+              )}
+            </div>
+          ); })}
+          {(!brands||brands.length===0) && <div style={{ fontSize:12, color:C.sub }}>Add brands in Lists to attach decks.</div>}
+        </div>
+      </div>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
         <span style={{ fontSize:12, color:C.sub, fontWeight:600 }}>Sort by</span>
         <select value={sort} onChange={(e)=>setSort(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", cursor:"pointer" }}>
@@ -861,7 +947,7 @@ function Pulse({ data }) {
 }
 
 const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
-const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["accounts","Accounts"],["pulse","Pulse"],["settings","Lists"]];
+const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["pulse","Pulse"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
@@ -885,6 +971,18 @@ function AddInline({ onAdd }) {
   return (<div style={{ display:"flex", gap:6 }}><input value={v} onChange={(e)=>setV(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ onAdd(v); setV(""); } }} placeholder="Add…" style={{ flex:1, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 9px", fontSize:12, outline:"none" }} /><button onClick={()=>{ onAdd(v); setV(""); }} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:7, width:30, cursor:"pointer" }}>+</button></div>);
 }
 
+// read any file to a data URL (used for collab deck uploads)
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+}
+// open a stored data URL in a new tab via a blob (reliable for PDFs)
+function openDataUrl(dataUrl) {
+  try {
+    const parts = String(dataUrl).split(","); const mime = (parts[0].match(/data:([^;]+)/) || [])[1] || "application/octet-stream";
+    const bin = atob(parts[1]); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: mime })); window.open(url, "_blank");
+  } catch (e) { window.open(dataUrl, "_blank"); }
+}
 // resize an uploaded image to a small square-ish logo and return a data URL (keeps the shared DB light)
 function fileToLogoDataURL(file, max=220) {
   return new Promise((resolve, reject) => {
@@ -910,7 +1008,7 @@ function fileToLogoDataURL(file, max=220) {
 function Modal({ modal, L, onClose, onSave, isAdmin }) {
   const [rec,setRec] = useState(modal.record);
   const fields = fieldSets(L)[modal.entity].filter((f)=>!(f.adminOnly && !isAdmin));
-  const title = { ideas:"Idea", pipeline:"Pipeline piece", calendar:"Calendar post", collabs:"Collab", accounts:"Account" }[modal.entity];
+  const title = { ideas:"Idea", pipeline:"Pipeline piece", calendar:"Calendar post", collabs:"Collab", accounts:"Account", hiring:"Job post" }[modal.entity];
   const set = (k,v) => setRec((r)=>({ ...r, [k]:v }));
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:50, padding:16, backdropFilter:"blur(2px)" }}>
@@ -1098,20 +1196,23 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
   const [busy,setBusy]=useState(false); const [msg,setMsg]=useState(null);
   const [members,setMembers]=useState(null); const [mErr,setMErr]=useState("");
   const [editId,setEditId]=useState(null); const [eRole,setERole]=useState("user"); const [eTabs,setETabs]=useState([]); const [eBusy,setEBusy]=useState(false);
+  const [cRoles,setCRoles]=useState([]); const [emp,setEmp]=useState("Full time");
+  const [eRoles,setERoles]=useState([]); const [eEmp,setEEmp]=useState("Full time");
   const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
+  const roleChip = (label, on, onClick) => <button type="button" key={label} onClick={onClick} style={{ border:`1.5px solid ${on?C.navy:C.line}`, background:on?"#F3F6FC":"#fff", color:on?C.navy:C.sub, borderRadius:8, padding:"5px 9px", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{on?"✓ ":""}{label}</button>;
   const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>setMembers(r.users||[])).catch((e)=>setMErr(String((e&&e.message)||e))); };
   useEffect(()=>{ load(); }, []);
   const toggleTab=(id)=>setTabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]);
   const submit = async (e)=>{ e.preventDefault(); setBusy(true); setMsg(null);
-    const res = await onEnrol({ name, email:email.trim(), password:pw, role, tabs: role==="admin"?null:tabs });
+    const res = await onEnrol({ name, email:email.trim(), password:pw, role, tabs: role==="admin"?null:tabs, contentRoles:cRoles, employment:emp });
     setBusy(false);
     if (res.error) setMsg({ ok:false, text:res.error });
-    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); load(); }
+    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); setCRoles([]); setEmp("Full time"); load(); }
   };
   const remove = async (u)=>{ const ok = window.confirm ? window.confirm(`Remove ${u.email}? They will lose access to Content Hub immediately.`) : true; if(!ok) return; try{ await onRemoveUser(u.id); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } };
-  const startEdit = (u)=>{ setEditId(u.id); setERole(u.role||"user"); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); };
+  const startEdit = (u)=>{ setEditId(u.id); setERole(u.role||"user"); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); setERoles(Array.isArray(u.contentRoles)?u.contentRoles.slice():[]); setEEmp(u.employment||"Full time"); };
   const toggleETab = (id)=>{ if(id==="dashboard") return; setETabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]); };
-  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, role:eRole, tabs: eRole==="admin"?null:eTabs }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
+  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, role:eRole, tabs: eRole==="admin"?null:eTabs, contentRoles:eRoles, employment:eEmp }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
   return (
     <div>
       <Toolbar title="Admin" sub="Enrol team members, set which tabs they can access, and manage logins" />
@@ -1134,6 +1235,11 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                 <div style={{ fontSize:10.5, color:C.sub, marginTop:5 }}>Dashboard is always on. Admins see every tab.</div>
               </div>
             )}
+            <div>
+              <label style={lbl}>Content role(s)</label>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{CONTENT_ROLES.map((cr)=>roleChip(cr, cRoles.includes(cr), ()=>setCRoles((s)=>s.includes(cr)?s.filter((x)=>x!==cr):[...s,cr])))}</div>
+            </div>
+            <div><label style={lbl}>Employment</label><select value={emp} onChange={(e)=>setEmp(e.target.value)} style={inp()}>{EMPLOYMENT_TYPES.map((x)=><option key={x} value={x}>{x}</option>)}</select></div>
             {msg && <div style={{ background:msg.ok?"#D6EFD6":"#FBE4E6", color:msg.ok?"#15724A":"#A11", fontSize:12, fontWeight:600, padding:"8px 10px", borderRadius:8 }}>{msg.text}</div>}
             <button type="submit" disabled={busy} style={{ border:"none", background:busy?"#9FB0CC":C.navy, color:"#fff", padding:"10px", borderRadius:10, fontWeight:700, fontSize:13.5, cursor:busy?"default":"pointer" }}>{busy?"Enrolling…":"Enrol member"}</button>
           </form>
@@ -1151,6 +1257,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:12.5, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.name||u.email}</div>
                     <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
+                    {(u.employment || (Array.isArray(u.contentRoles)&&u.contentRoles.length>0)) && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>{u.employment && <Pill bg={u.employment==="Full time"?"#DCE8FB":"#FCE9D6"} fg={u.employment==="Full time"?"#1E3F86":"#8a5a1a"}>{u.employment}</Pill>}{Array.isArray(u.contentRoles)&&u.contentRoles.map((cr)=><Pill key={cr} bg="#EEF1F6" fg={C.sub}>{cr}</Pill>)}</div>}
                   </div>
                   <Pill bg={u.role==="admin"?C.yellow:"#EEF1F6"} fg={u.role==="admin"?C.navy:C.sub}>{u.role==="admin"?"Admin":"Member"}</Pill>
                   {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
@@ -1170,6 +1277,11 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                         <div style={{ fontSize:10.5, color:C.sub, marginTop:5 }}>Dashboard is always on.</div>
                       </div>
                     )}
+                    <div style={{ marginBottom:10 }}>
+                      <label style={lbl}>Content role(s)</label>
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{CONTENT_ROLES.map((cr)=>roleChip(cr, eRoles.includes(cr), ()=>setERoles((s)=>s.includes(cr)?s.filter((x)=>x!==cr):[...s,cr])))}</div>
+                    </div>
+                    <div style={{ marginBottom:10 }}><label style={lbl}>Employment</label><select value={eEmp} onChange={(e)=>setEEmp(e.target.value)} style={inp()}>{EMPLOYMENT_TYPES.map((x)=><option key={x} value={x}>{x}</option>)}</select></div>
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                       <button onClick={()=>setEditId(null)} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer" }}>Cancel</button>
                       <button onClick={()=>saveEdit(u)} disabled={eBusy} style={{ border:"none", background:eBusy?"#9FB0CC":C.navy, color:"#fff", borderRadius:8, padding:"7px 15px", fontSize:12.5, fontWeight:700, cursor:eBusy?"default":"pointer" }}>{eBusy?"Saving…":"Save access"}</button>
@@ -1216,6 +1328,60 @@ function Accounts({ rows, onAdd, onEdit, onDel }) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── hiring (job posts everyone can share to friends / family) ── */
+function Hiring({ rows, isAdmin, siteUrl, onAdd, onEdit, onDel }) {
+  const [copied, setCopied] = useState(null);
+  const shareText = (r) => {
+    const link = (r.applyLink && r.applyLink.trim()) || siteUrl || "";
+    return [
+      `📢 We're hiring: ${r.title || "Open role"}`,
+      [r.employment, r.brand, r.location].filter(Boolean).join(" · "),
+      r.desc || "",
+      link ? `Apply / details: ${link}` : "",
+      "— BBB Media Group",
+    ].filter(Boolean).join("\n\n");
+  };
+  const share = (r, how) => {
+    const text = shareText(r);
+    if (how==="whatsapp") window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    else if (how==="email") window.open(`mailto:?subject=${encodeURIComponent("We're hiring: "+(r.title||"Open role"))}&body=${encodeURIComponent(text)}`, "_blank");
+    else if (how==="native" && typeof navigator!=="undefined" && navigator.share) navigator.share({ title:`We're hiring: ${r.title||""}`, text }).catch(()=>{});
+    else if (how==="copy" && typeof navigator!=="undefined" && navigator.clipboard) navigator.clipboard.writeText(text).then(()=>{ setCopied(r._id); setTimeout(()=>setCopied(null),1600); });
+  };
+  const sBtn = (label, onClick, bg, fg) => <button onClick={onClick} style={{ border:`1px solid ${C.line}`, background:bg||"#fff", color:fg||C.navy, borderRadius:8, padding:"6px 11px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{label}</button>;
+  return (
+    <div>
+      <Toolbar title="Hiring" sub={`${rows.length} open role${rows.length===1?"":"s"} — anyone can share these with friends & family`} onAdd={isAdmin?onAdd:undefined} addLabel="New job post" />
+      {rows.length===0 ? <Empty>{isAdmin ? 'No job posts yet. Click "New job post" to add one.' : "No open roles right now."}</Empty> : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))", gap:12 }}>
+          {rows.map((r)=>(
+            <div key={r._id} style={card(16)}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"start", gap:8 }}>
+                <div style={{ fontSize:15.5, fontWeight:700, lineHeight:1.3 }}>{r.title||"Untitled role"}</div>
+                {isAdmin && <div style={{ display:"flex", flexShrink:0 }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div>}
+              </div>
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap", margin:"9px 0", alignItems:"center" }}>
+                {r.employment && <Pill bg={r.employment==="Full time"?"#DCE8FB":"#FCE9D6"} fg={r.employment==="Full time"?"#1E3F86":"#8a5a1a"}>{r.employment}</Pill>}
+                {r.brand && <BrandTag b={r.brand} />}
+                {r.location && <span style={{ fontSize:12, color:C.sub }}>📍 {r.location}</span>}
+              </div>
+              {r.desc && <div style={{ fontSize:12.5, color:C.sub, lineHeight:1.5, whiteSpace:"pre-wrap" }}>{r.desc}</div>}
+              {r.applyLink && <div style={{ fontSize:12, marginTop:8 }}><a href={r.applyLink} target="_blank" rel="noopener noreferrer" style={{ color:"#2D6CDF", fontWeight:600 }}>Apply link →</a></div>}
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap", marginTop:12, paddingTop:12, borderTop:`1px solid ${C.line}`, alignItems:"center" }}>
+                <span style={{ fontSize:11, fontWeight:700, color:C.sub, display:"inline-flex", alignItems:"center", gap:4 }}><Share2 size={13} />Share:</span>
+                {sBtn("WhatsApp", ()=>share(r,"whatsapp"), "#DCF0E4", "#12643f")}
+                {sBtn("Email", ()=>share(r,"email"))}
+                {sBtn(copied===r._id?"Copied ✓":"Copy", ()=>share(r,"copy"))}
+                {typeof navigator!=="undefined" && navigator.share && sBtn("More…", ()=>share(r,"native"))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
