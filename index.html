@@ -66,6 +66,7 @@ const AtSign = (p) => <Svg {...p}><circle cx="12" cy="12" r="4"/><path d="M16 8v
 const Megaphone = (p) => <Svg {...p}><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></Svg>;
 const Share2 = (p) => <Svg {...p}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5 8.6 10.5"/></Svg>;
 const FolderIcon = (p) => <Svg {...p}><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></Svg>;
+const Trophy = (p) => <Svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></Svg>;
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
@@ -80,6 +81,15 @@ const COLLAB_TYPE = {
 };
 const EMPLOYMENT_TYPES = ["Full time","Part time"];
 const CONTENT_ROLES = ["Talent","Social Media","Editor","Business Development"];
+const TRIP_TIERS = [
+  { min:60000, label:"Japan", emoji:"🇯🇵" },
+  { min:80000, label:"Europe", emoji:"🇪🇺" },
+  { min:100000, label:"Iceland / Norway", emoji:"🇮🇸" },
+];
+const INCENTIVE_PEOPLE = [
+  { name:"Madeleine", perFollowerRM:1, terms:["RM1 earned per follower gained from her content","Organic follower growth shared based on individual contribution"] },
+  { name:"Serene", perFollowerRM:0, terms:["Recognition earned per follower gained from her content","Organic follower growth shared based on individual contribution","Confirmation at 3 months","Bonus & increment at end of year"] },
+];
 
 /* ── seed ── */
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -130,6 +140,7 @@ const SEED = {
     { title:"Short-Video Editor (CapCut/Premiere)", brand:"BBBwealth", employment:"Full time", location:"KL / Hybrid", applyLink:"", desc:"Edit 8–12 finance short videos a week. Fast turnaround, hook-first storytelling, Mandarin + English subtitles." },
   ]),
   collabDecks: {},
+  incentive: { Madeleine:{ baseline:0, current:0 }, Serene:{ baseline:0, current:0 } },
   lists: {
     brands:["BBBwealth","KL Money","Madwithmoney"],
     types:["Reel","Carousel","Pic + Commentary","Long Video"],
@@ -185,7 +196,7 @@ const syncCalendar = (calendar, item, status) => {
   return [...calendar, { _id: uid(), ...base }];
 };
 const calStatusForPipe = (it) => it.status === "Posted" ? "Posted" : (it.status === "Scheduled" ? "Scheduled" : "Planned");
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; return d; };
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
   return (
@@ -369,6 +380,7 @@ function App() {
   const del = (entity,_id) => persist({ ...data, [entity]:data[entity].filter((r)=>r._id!==_id) });
   const patchIdea = (id, patch) => persist({ ...data, ideas: data.ideas.map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
   const saveDeck = (brand, deck) => persist({ ...data, collabDecks: { ...(data.collabDecks||{}), [brand]: deck } });
+  const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
   const setStatus = (entity,_id,status) => persist({ ...data, [entity]:data[entity].map((r)=>(r._id===_id?{ ...r, status }:r)) });
   const setPipelineStatus = (_id, status) => {
     const pipeline = data.pipeline.map((r)=>(r._id===_id ? withStamp(r, status) : r));
@@ -427,7 +439,7 @@ function App() {
     { id:"dashboard", label:"Dashboard", icon:LayoutDashboard }, { id:"ideas", label:"Idea Bank", icon:Lightbulb },
     { id:"pipeline", label:"Pipeline", icon:Columns }, { id:"weekly", label:"Content Tracker", icon:ClipboardList },
     { id:"productivity", label:"Productivity", icon:BarChart3 }, { id:"calendar", label:"Calendar", icon:CalendarDays },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"decks", label:"Collab Decks", icon:FolderIcon }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"decks", label:"Collab Decks", icon:FolderIcon }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"incentive", label:"Incentive", icon:Trophy }, { id:"pulse", label:"Pulse", icon:Activity }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
@@ -481,6 +493,7 @@ function App() {
           {tab==="decks" && <CollabDecks decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
+          {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} />}
           {tab==="pulse" && <Pulse data={data} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
           {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
@@ -949,6 +962,86 @@ function CollabDecks({ decks, brands, isAdmin, onSaveDeck }) {
   );
 }
 
+/* ── incentive (follower-growth rewards + incentive trips) ── */
+function Incentive({ data, isAdmin, onSave }) {
+  const inc = data || {};
+  const maxTier = 100000;
+  const fmt = (n)=>Number(n||0).toLocaleString();
+  const tierFor = (n)=>{ let t=null; TRIP_TIERS.forEach((x)=>{ if(n>=x.min) t=x; }); return t; };
+  const nextTier = (n)=>TRIP_TIERS.find((x)=>n<x.min);
+  const numInp = { width:"100%", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", fontSize:14.5, fontWeight:700, fontFamily:"inherit" };
+  return (
+    <div>
+      <Toolbar title="Incentive" sub="Follower-growth rewards & incentive trips for the content team" />
+      <div style={{ ...card(16), marginBottom:16 }}>
+        <SectionTitle icon={Trophy}>Incentive trips — unlock by total followers</SectionTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))", gap:10, marginTop:12 }}>
+          {TRIP_TIERS.map((t)=>(
+            <div key={t.label} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"12px 14px", background:"#F8F9FC" }}>
+              <div style={{ fontSize:24 }}>{t.emoji}</div>
+              <div style={{ fontSize:14.5, fontWeight:700, marginTop:4 }}>{t.label}</div>
+              <div style={{ fontSize:12, color:C.sub, marginTop:2 }}>{">"} {fmt(t.min)} followers</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize:11.5, color:C.sub, marginTop:10 }}>Both Madeleine & Serene qualify for the trip once total followers pass each milestone.</div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))", gap:12 }}>
+        {INCENTIVE_PEOPLE.map((p)=>{
+          const rec = inc[p.name] || {}; const cur=Number(rec.current)||0; const base=Number(rec.baseline)||0;
+          const gained=Math.max(0, cur-base);
+          const tier=tierFor(cur); const next=nextTier(cur);
+          const pct=Math.max(0, Math.min(100, (cur/maxTier)*100));
+          return (
+            <div key={p.name} style={card(16)}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ width:34, height:34, borderRadius:10, background:C.navy, color:"#fff", display:"grid", placeItems:"center", fontWeight:800, fontSize:14 }}>{p.name.slice(0,1)}</span>
+                <div><div style={{ fontSize:16, fontWeight:700 }}>{p.name}</div><div style={{ fontSize:11.5, color:C.sub }}>IG follower-growth incentive</div></div>
+                {tier && <span style={{ marginLeft:"auto" }}><Pill bg="#DCF0E4" fg="#15724A">{tier.emoji} {tier.label} unlocked</Pill></span>}
+              </div>
+              <ul style={{ margin:"12px 0", paddingLeft:18, fontSize:12.5, color:C.sub, lineHeight:1.65 }}>
+                {p.terms.map((t,i)=><li key={i}>{t}</li>)}
+              </ul>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+                <div style={{ flex:1, minWidth:120 }}>
+                  <div style={{ fontSize:10.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:4 }}>Baseline followers</div>
+                  {isAdmin ? <InlineText value={base} onCommit={(v)=>onSave(p.name,{baseline:Number(v)||0})} style={numInp} /> : <div style={{ fontSize:15, fontWeight:700 }}>{fmt(base)}</div>}
+                </div>
+                <div style={{ flex:1, minWidth:120 }}>
+                  <div style={{ fontSize:10.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:4 }}>Current followers</div>
+                  {isAdmin ? <InlineText value={cur} onCommit={(v)=>onSave(p.name,{current:Number(v)||0})} style={numInp} /> : <div style={{ fontSize:15, fontWeight:700 }}>{fmt(cur)}</div>}
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+                <div style={{ flex:1, background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px" }}>
+                  <div style={{ fontSize:20, fontWeight:700, color:C.navy }}>{fmt(gained)}</div>
+                  <div style={{ fontSize:11, color:C.sub, fontWeight:600 }}>Followers gained</div>
+                </div>
+                <div style={{ flex:1, background:"#FFF9E6", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px" }}>
+                  <div style={{ fontSize:20, fontWeight:700, color:"#8a6d1a" }}>{p.perFollowerRM>0 ? `RM ${fmt(gained*p.perFollowerRM)}` : "Recognition"}</div>
+                  <div style={{ fontSize:11, color:C.sub, fontWeight:600 }}>{p.perFollowerRM>0 ? "Earned · RM1 / follower" : "Per follower gained"}</div>
+                </div>
+              </div>
+              <div>
+                <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:C.sub, marginBottom:5 }}>
+                  <span style={{ fontWeight:700 }}>Trip progress</span>
+                  <span>{next ? `${fmt(next.min-cur)} to ${next.emoji} ${next.label}` : "🎉 Top tier unlocked"}</span>
+                </div>
+                <div style={{ height:10, background:"#EEF1F6", borderRadius:6, overflow:"hidden" }}><div style={{ width:`${pct}%`, height:"100%", background:tier?"#1FA463":C.yellow, borderRadius:6, transition:"width .4s" }} /></div>
+                <div style={{ position:"relative", height:16, marginTop:4 }}>
+                  {TRIP_TIERS.map((t)=>{ const left=Math.min(100,(t.min/maxTier)*100); const hit=cur>=t.min; return (
+                    <span key={t.label} style={{ position:"absolute", left:`${left}%`, transform:"translateX(-50%)", fontSize:10, fontWeight:hit?700:500, color:hit?"#15724A":C.sub, whiteSpace:"nowrap" }}>{t.emoji}{Math.round(t.min/1000)}k</span>
+                  ); })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Pulse({ data }) {
   const STAGES = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
   const items = data.pipeline;
@@ -990,7 +1083,7 @@ function Pulse({ data }) {
 }
 
 const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
-const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["decks","Collab Decks"],["accounts","Accounts"],["hiring","Hiring"],["pulse","Pulse"],["settings","Lists"]];
+const MEMBER_TABS = [["dashboard","Dashboard"],["ideas","Idea Bank"],["pipeline","Pipeline"],["weekly","Content Tracker"],["productivity","Productivity"],["calendar","Calendar"],["collabs","Collabs"],["decks","Collab Decks"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["pulse","Pulse"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
