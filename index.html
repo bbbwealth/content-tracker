@@ -331,6 +331,7 @@ function App() {
   const [saved, setSaved] = useState("");
   const savedTimer = useRef();
   const lastPush = useRef("");
+  const undoRef = useRef([]); // grid undo history — must sit with the other hooks, above the early returns
 
   // ── auth: track who is signed in ──
   useEffect(() => {
@@ -425,7 +426,32 @@ function App() {
   const del = (entity,_id) => persist({ ...data, [entity]:data[entity].filter((r)=>r._id!==_id) });
   const patchIdea = (id, patch) => persist({ ...data, ideas: data.ideas.map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
   // one source of truth: the Calendar is just a view of pieces that have a schedule date
-  const patchPiece = (id, patch) => persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
+  // ── undo history for grid edits (paste / range-clear / single cell) ──
+  // snapshots the pipeline BEFORE a change so Ctrl+Z can roll it back
+  const snapshotPipeline = () => {
+    undoRef.current.push(JSON.stringify(data.pipeline));
+    if (undoRef.current.length > 40) undoRef.current.shift();
+  };
+  const undoGrid = () => {
+    const prev = undoRef.current.pop();
+    if (prev == null) return false;
+    persist({ ...data, pipeline: JSON.parse(prev) });
+    return true;
+  };
+  const canUndo = () => undoRef.current.length > 0;
+  const patchPiece = (id, patch) => { snapshotPipeline(); persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===id ? { ...r, ...patch } : r)) }); };
+  // one atomic write for a pasted block: overwrite existing rows, append new pieces for the overflow
+  const applyGridPaste = ({ updates, creates }) => {
+    snapshotPipeline();
+    let rows = data.pipeline.map((r)=>{
+      const u = (updates||[]).find((x)=>x.id===r._id);
+      return u ? { ...r, ...u.patch } : r;
+    });
+    (creates||[]).forEach((p)=>{
+      rows.push(withStamp({ _id:uid(), code:nextCode(rows,"C"), brand:"", type:"", kind:"Organic", category:"", title:"", status:STAGES[0], platform:"Instagram", owner:myName, by:myName, dateAdded:nowISO(), scriptWriter:"", target:"", scriptLink:"", footageLink:"", contentLink:"", notes:"", adminComment:"", crossPost:[], ...p }, p.status || STAGES[0]));
+    });
+    persist({ ...data, pipeline: rows });
+  };
   // plug a piece into a day from the Calendar (or unplug it) — the Content grid reflects it instantly
   const schedulePieces = (ids, date) => persist({ ...data, pipeline: data.pipeline.map((r)=>(ids.includes(r._id) ? withStamp({ ...r, target:date, status:ST.SCHEDULED }, ST.SCHEDULED) : r)) });
   const unschedulePiece = (id) => persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===id ? { ...r, target:"", status:(r.status===ST.SCHEDULED||r.status===ST.PUBLISHED)?ST.EDITED:r.status } : r)) });
@@ -457,7 +483,7 @@ function App() {
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
   const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
   const setStatus = (entity,_id,status) => persist({ ...data, [entity]:data[entity].map((r)=>(r._id===_id?{ ...r, status }:r)) });
-  const setPipelineStatus = (_id, status) => persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===_id ? withStamp(r, status) : r)) });
+  const setPipelineStatus = (_id, status) => { snapshotPipeline(); persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===_id ? withStamp(r, status) : r)) }); };
   const setWeeklyTarget = (n) => persist({ ...data, settings:{ ...data.settings, weeklyTarget: Math.max(0, Number(n)||0) } });
   // duplicate straight into the row below — no popup
   const duplicatePiece = (r) => {
@@ -539,7 +565,7 @@ function App() {
 
         <div style={{ padding:24, flex:1 }}>
           {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onLink={linkInsight} followers={data.followers} onSaveFollowers={saveFollowers} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="pipeline" && <ContentBoard rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} />}
+          {tab==="pipeline" && <ContentBoard rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />}
           {tab==="calendar" && <Calendar rows={filt(data.pipeline)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
           {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
           {tab==="decks" && <CollabDecks decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} />}
@@ -1119,11 +1145,17 @@ function ShareModal({ r, phones, team, onClose }) {
   );
 }
 
-function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onEdit, onDel, onDuplicate, onPatch, onQuickAdd, topicLinks, memberPhones, brandFilter, setBrandFilter, setStatus }) {
+function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onEdit, onDel, onDuplicate, onPatch, onQuickAdd, topicLinks, memberPhones, brandFilter, setBrandFilter, setStatus, onPaste, onUndo, canUndo }) {
   const L = lists || {};
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
   const stages = (L.pipelineStatus && L.pipelineStatus.length) ? L.pipelineStatus : STAGES;
   const gridRef = useRef(null);
+  const [sel, setSel] = useState(null);   // { r1,c1,r2,c2 } anchor -> focus
+  const dragRef = useRef(false);
+  const [toast, setToast] = useState("");
+  const toastTimer = useRef(null);
+  // clear the previous timer, otherwise an older toast's timeout wipes a newer message early
+  const flash = (m)=>{ setToast(m); if(toastTimer.current) clearTimeout(toastTimer.current); toastTimer.current = setTimeout(()=>setToast(""), 2600); };
   const [sortKey, setSortKey] = useState("");
   const [sortDir, setSortDir] = useState(1);
   const [newTitle, setNewTitle] = useState("");
@@ -1139,15 +1171,130 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
     if (next && (!cur || cur===prev)) patch.scriptLink = next;
     onPatch(r._id, patch);
   };
+  // ── excel-style range selection + clipboard ──
+  // each grid column, and how to read/write it as plain text
+  const GRID_COLS = [
+    { field:"dateAdded",    kind:"date", label:"Date added" },
+    { field:"brand",        kind:"list", label:"Brand",   opts:()=>L.brands||[] },
+    { field:"type",         kind:"list", label:"Type",    opts:()=>L.types||[] },
+    { field:"title",        kind:"text", label:"Idea" },
+    { field:"category",     kind:"list", label:"Topic",   opts:()=>L.topics||[] },
+    { field:"status",       kind:"list", label:"Stage",   opts:()=>stages },
+    { field:"scriptWriter", kind:"list", label:"Writer",  opts:()=>team },
+    { field:"target",       kind:"date", label:"Schedule" },
+    { field:"scriptLink",   kind:"text", label:"Script" },
+    { field:"footageLink",  kind:"text", label:"Footage" },
+    { field:"contentLink",  kind:"text", label:"Content" },
+  ];
+  const NCOL = GRID_COLS.length;
+  const readCell = (r, ci) => { const c=GRID_COLS[ci]; if(!c||!r) return ""; const v=r[c.field]; return c.kind==="date" ? (v?isoToDisp(v):"") : String(v==null?"":v); };
+  // parse a pasted string into a storable value — undefined means "don't trust it, skip this cell"
+  const writeCell = (ci, raw) => {
+    const c = GRID_COLS[ci]; if (!c) return undefined;
+    const s = String(raw==null?"":raw).trim();
+    if (c.kind==="date") { if(!s) return ""; const iso=dispToIso(s); if(iso) return iso; if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; return undefined; }
+    if (c.kind==="list") { if(!s) return ""; const hit=(c.opts()||[]).find((x)=>String(x).toLowerCase()===s.toLowerCase()); return hit===undefined?undefined:hit; }
+    return s;
+  };
+  const normSel = (s)=> s ? { r1:Math.min(s.r1,s.r2), r2:Math.max(s.r1,s.r2), c1:Math.min(s.c1,s.c2), c2:Math.max(s.c1,s.c2) } : null;
+  const selSize = ()=>{ const n=normSel(sel); return n ? (n.r2-n.r1+1)*(n.c2-n.c1+1) : 0; };
+  const multiSel = selSize() > 1;
+  // only tint when a real range is up, so ordinary single-cell editing looks unchanged
+  const cellSelected = (ri,ci)=>{ if(!multiSel) return false; const n=normSel(sel); return ri>=n.r1 && ri<=n.r2 && ci>=n.c1 && ci<=n.c2; };
+  const SEL_CELL = { background:"#DBE7FB", boxShadow:"inset 0 0 0 1px #B9D0F5" };
+  const cellAt = (e)=>{ const td=e.target && e.target.closest && e.target.closest("td[data-r]"); return td ? { r:Number(td.getAttribute("data-r")), c:Number(td.getAttribute("data-c")) } : null; };
+  // functional updater — shift+click must extend from the CURRENT anchor, not a stale closure copy
+  const onCellDown = (e)=>{
+    const p=cellAt(e); if(!p) return;
+    if (e.shiftKey) { e.preventDefault(); setSel((s)=> s ? { ...s, r2:p.r, c2:p.c } : { r1:p.r, c1:p.c, r2:p.r, c2:p.c }); }
+    else { setSel({ r1:p.r, c1:p.c, r2:p.r, c2:p.c }); dragRef.current=true; }
+  };
+  const onCellOver = (e)=>{ if(!dragRef.current) return; const p=cellAt(e); if(!p) return; setSel((s)=> s ? { ...s, r2:p.r, c2:p.c } : s); };
+  useEffect(()=>{ const up=()=>{ dragRef.current=false; }; document.addEventListener("mouseup", up); return ()=>document.removeEventListener("mouseup", up); },[]);
+  const buildTSV = ()=>{
+    const n=normSel(sel); if(!n) return "";
+    const out=[];
+    for(let ri=n.r1; ri<=Math.min(n.r2, list.length-1); ri++){
+      const cells=[];
+      for(let ci=n.c1; ci<=n.c2; ci++) cells.push(readCell(list[ri], ci).replace(/\t/g," ").replace(/\r?\n/g," "));
+      out.push(cells.join("\t"));
+    }
+    return out.join("\n");
+  };
+  // Ctrl+C — hand the range to the clipboard as TSV so it lands in Excel as real columns
+  const onGridCopy = (e)=>{
+    if (!multiSel) return; // single cell: let the browser copy the text in the field
+    e.preventDefault();
+    const tsv = buildTSV();
+    if (e.clipboardData) e.clipboardData.setData("text/plain", tsv);
+    flash(`Copied ${selSize()} cells`);
+  };
+  const pasteTSV = (text)=>{
+    const n = normSel(sel); if(!n) return;
+    const lines = String(text).replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");
+    while (lines.length && lines[lines.length-1]==="") lines.pop();
+    if (!lines.length) return;
+    const updates=[], creates=[]; let skipped=0;
+    lines.forEach((line, i)=>{
+      const cells = line.split("\t");
+      const patch = {};
+      cells.forEach((raw, j)=>{
+        const col = n.c1 + j; if (col >= NCOL) return;
+        const v = writeCell(col, raw);
+        if (v === undefined) { skipped++; return; }
+        patch[GRID_COLS[col].field] = v;
+      });
+      if (!Object.keys(patch).length) return;
+      const target = n.r1 + i;
+      if (target < list.length) updates.push({ id:list[target]._id, patch });
+      else creates.push(patch); // past the last row -> becomes a new piece
+    });
+    if (!updates.length && !creates.length) { flash("Nothing usable in that paste"); return; }
+    onPaste && onPaste({ updates, creates });
+    const bits=[];
+    if (updates.length) bits.push(updates.length+" row"+(updates.length===1?"":"s")+" updated");
+    if (creates.length) bits.push(creates.length+" new piece"+(creates.length===1?"":"s"));
+    if (skipped) bits.push(skipped+" cell"+(skipped===1?"":"s")+" skipped");
+    flash(bits.join(" · ")+" — Ctrl+Z to undo");
+  };
+  const onGridPaste = (e)=>{
+    const text = e.clipboardData && e.clipboardData.getData("text/plain");
+    if (!text) return;
+    if (!/[\t\n\r]/.test(text) && !multiSel) return; // plain single value into one field: behave normally
+    e.preventDefault();
+    pasteTSV(text);
+  };
+  const clearSel = ()=>{
+    const n = normSel(sel); if(!n) return;
+    const updates=[];
+    for (let ri=n.r1; ri<=Math.min(n.r2, list.length-1); ri++){
+      const patch={};
+      for (let ci=n.c1; ci<=n.c2; ci++){ const c=GRID_COLS[ci]; if(c.field==="status") continue; patch[c.field]=""; }
+      if (Object.keys(patch).length) updates.push({ id:list[ri]._id, patch });
+    }
+    if (!updates.length) return;
+    onPaste && onPaste({ updates, creates:[] });
+    flash("Cleared "+updates.length+" row"+(updates.length===1?"":"s")+" — Ctrl+Z to undo");
+  };
   // excel-style keyboard nav: Enter/↓ = down, Shift+Enter/↑ = up, Tab = across (native), Esc = exit
   const onGridKey = (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && (e.key==="a" || e.key==="A")) { e.preventDefault(); setSel({ r1:0, c1:0, r2:Math.max(0,list.length-1), c2:NCOL-1 }); flash("Selected all "+list.length+" rows"); return; }
+    if (mod && (e.key==="z" || e.key==="Z")) { e.preventDefault(); setSel(null); flash(onUndo && onUndo() ? "Undone" : "Nothing left to undo"); return; }
+    if ((e.key==="Delete" || e.key==="Backspace") && multiSel) { e.preventDefault(); clearSel(); return; }
+    if (e.shiftKey && sel && /^Arrow(Up|Down|Left|Right)$/.test(e.key)) {
+      e.preventDefault();
+      const d = { ArrowUp:[-1,0], ArrowDown:[1,0], ArrowLeft:[0,-1], ArrowRight:[0,1] }[e.key];
+      setSel((s)=>({ ...s, r2:Math.max(0,Math.min(list.length-1, s.r2+d[0])), c2:Math.max(0,Math.min(NCOL-1, s.c2+d[1])) }));
+      return;
+    }
     const el = e.target;
     if (!el || !el.getAttribute) return;
     const r = el.getAttribute("data-r"), c = el.getAttribute("data-c");
     if (r === null || c === null) return;
     const isSelect = el.tagName === "SELECT" || el.getAttribute("data-select") === "1";
     let nr = Number(r);
-    if (e.key === "Escape") { el.blur(); return; }
+    if (e.key === "Escape") { setSel(null); el.blur(); return; }
     else if (e.key === "Enter") { e.preventDefault(); nr += e.shiftKey ? -1 : 1; }
     else if (e.key === "ArrowDown" && !isSelect) { e.preventDefault(); nr += 1; }
     else if (e.key === "ArrowUp" && !isSelect) { e.preventDefault(); nr -= 1; }
@@ -1191,7 +1338,7 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
       </div>
       {(
         <div style={{ ...card(0), overflow:"visible" }}>
-          <div style={{ overflow:"visible" }} ref={gridRef} onKeyDown={onGridKey}>
+          <div style={{ overflow:"visible" }} ref={gridRef} onKeyDown={onGridKey} onCopy={onGridCopy} onPaste={onGridPaste} onMouseDown={onCellDown} onMouseOver={onCellOver}>
             <table className="xl" style={{ width:"100%" }}>
               <colgroup>
                 <col style={{ width:170 }} /><col style={{ width:126 }} /><col style={{ width:88 }} /><col />
@@ -1213,32 +1360,44 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
                   <td><input ref={addRef} value={newTitle} onChange={(e)=>setNewTitle(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); commitNew(); } }} onBlur={commitNew} placeholder="Type an idea and press Enter…" /></td>
                   <td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
                 </tr>
-                {list.map((r,ri)=>(
-                  <tr key={r._id} style={{ background:"#fff" }}>
-                    <td><div style={{ display:"flex", alignItems:"center", gap:1 }}>
+                {list.map((r,ri)=>{
+                  const cells = [
+                    <div style={{ display:"flex", alignItems:"center", gap:1 }}>
                       <DateCell data-r={ri} data-c={0} value={r.dateAdded} onCommit={(v)=>onPatch(r._id,{dateAdded:v})} />
                       <IconBtn title="Share via WhatsApp" onClick={()=>setShareRow(r)}><Share2 size={12} /></IconBtn>
                       <IconBtn title="Duplicate row below" onClick={()=>onDuplicate(r)}><Copy size={12} /></IconBtn>
                       <IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={12} /></IconBtn>
-                    </div></td>
-                    <td><HoverSelect data-r={ri} data-c={1} value={r.brand||""} options={L.brands||[]} onChange={(v)=>onPatch(r._id,{brand:v})} /></td>
-                    <td><HoverSelect data-r={ri} data-c={2} value={r.type||""} options={L.types||[]} onChange={(v)=>onPatch(r._id,{type:v})} /></td>
-                    <td><div style={{ display:"flex", alignItems:"center" }}>{r.imported ? <span title="Imported from Meta — this is a post that already went out, not one of your planned ideas" style={{ flexShrink:0, color:BLUE.accent, fontWeight:900, fontSize:11, paddingLeft:5 }}>⬆</span> : null}<InlineText data-r={ri} data-c={3} value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Idea…" /></div></td>
-                    <td><HoverSelect data-r={ri} data-c={4} value={r.category||""} options={L.topics||[]} onChange={(v)=>setTopic(r, v)} placeholder="topic" /></td>
-                    <td><HoverSelect data-r={ri} data-c={5} value={r.status||stages[0]} options={stages} onChange={(v)=>setStatus(r._id, v)} style={{ background:STAGE_TINT[r.status]||"transparent", color:STAGE_INK[r.status]||C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
-                    <td><HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={team} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} /></td>
-                    <td><div style={{ display:"flex", alignItems:"center" }}><DateCell data-r={ri} data-c={7} value={r.target} onCommit={(v)=>onPatch(r._id,{target:v})} /><button onClick={()=>setStatus(r._id, r.status===ST.PUBLISHED ? ST.SCHEDULED : ST.PUBLISHED)} tabIndex={-1} title={r.imported ? "Published — came in from the Meta import, not ticked by the team" : (r.status===ST.PUBLISHED ? "Published — click to undo" : "Tick when published as scheduled")} style={{ border:"none", cursor:"pointer", background:r.status===ST.PUBLISHED?"#1FA463":"#E9EDF4", color:r.status===ST.PUBLISHED?"#fff":"#A9B2C4", width:18, height:18, borderRadius:5, fontSize:11, fontWeight:900, lineHeight:1, flexShrink:0, marginRight:4, display:"grid", placeItems:"center" }}>✓</button></div></td>
-                    {[["scriptLink",8],["footageLink",9],["contentLink",10]].map((lk)=>(
-                      <td key={lk[0]}><div style={{ display:"flex", alignItems:"center" }}><InlineText data-r={ri} data-c={lk[1]} value={r[lk[0]]} onCommit={(v)=>onPatch(r._id,{[lk[0]]:v})} placeholder="—" />{r[lk[0]] && String(r[lk[0]]).trim() && <a href={r[lk[0]]} target="_blank" rel="noopener noreferrer" tabIndex={-1} title="Open" style={{ color:BLUE.accent, fontWeight:800, fontSize:12, textDecoration:"none", paddingRight:4 }}>↗</a>}</div></td>
-                    ))}
-                  </tr>
-                ))}
+                    </div>,
+                    <HoverSelect data-r={ri} data-c={1} value={r.brand||""} options={L.brands||[]} onChange={(v)=>onPatch(r._id,{brand:v})} />,
+                    <HoverSelect data-r={ri} data-c={2} value={r.type||""} options={L.types||[]} onChange={(v)=>onPatch(r._id,{type:v})} />,
+                    <div style={{ display:"flex", alignItems:"center" }}>{r.imported ? <span title="Imported from Meta — this is a post that already went out, not one of your planned ideas" style={{ flexShrink:0, color:BLUE.accent, fontWeight:900, fontSize:11, paddingLeft:5 }}>⬆</span> : null}<InlineText data-r={ri} data-c={3} value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Idea…" /></div>,
+                    <HoverSelect data-r={ri} data-c={4} value={r.category||""} options={L.topics||[]} onChange={(v)=>setTopic(r, v)} placeholder="topic" />,
+                    <HoverSelect data-r={ri} data-c={5} value={r.status||stages[0]} options={stages} onChange={(v)=>setStatus(r._id, v)} style={{ background:STAGE_TINT[r.status]||"transparent", color:STAGE_INK[r.status]||C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} />,
+                    <HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={team} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} />,
+                    <div style={{ display:"flex", alignItems:"center" }}><DateCell data-r={ri} data-c={7} value={r.target} onCommit={(v)=>onPatch(r._id,{target:v})} /><button onClick={()=>setStatus(r._id, r.status===ST.PUBLISHED ? ST.SCHEDULED : ST.PUBLISHED)} tabIndex={-1} title={r.imported ? "Published — came in from the Meta import, not ticked by the team" : (r.status===ST.PUBLISHED ? "Published — click to undo" : "Tick when published as scheduled")} style={{ border:"none", cursor:"pointer", background:r.status===ST.PUBLISHED?"#1FA463":"#E9EDF4", color:r.status===ST.PUBLISHED?"#fff":"#A9B2C4", width:18, height:18, borderRadius:5, fontSize:11, fontWeight:900, lineHeight:1, flexShrink:0, marginRight:4, display:"grid", placeItems:"center" }}>✓</button></div>,
+                    ...[["scriptLink",8],["footageLink",9],["contentLink",10]].map((lk)=>(
+                      <div style={{ display:"flex", alignItems:"center" }}><InlineText data-r={ri} data-c={lk[1]} value={r[lk[0]]} onCommit={(v)=>onPatch(r._id,{[lk[0]]:v})} placeholder="—" />{r[lk[0]] && String(r[lk[0]]).trim() && <a href={r[lk[0]]} target="_blank" rel="noopener noreferrer" tabIndex={-1} title="Open" style={{ color:BLUE.accent, fontWeight:800, fontSize:12, textDecoration:"none", paddingRight:4 }}>↗</a>}</div>
+                    )),
+                  ];
+                  return (
+                    <tr key={r._id}>
+                      {cells.map((node,ci)=>(
+                        <td key={ci} data-r={ri} data-c={ci} style={{ ...(ci===cells.length-1?{ borderRight:"none" }:null), ...(cellSelected(ri,ci)?SEL_CELL:null) }}>{node}</td>
+                      ))}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
       {list.length===0 && <Empty>No pieces match your filter.</Empty>}
+      <div style={{ fontSize:11, color:C.sub, marginTop:9, display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+        <span>Click a cell and drag (or Shift+click) to select a range · <b>Ctrl+A</b> select all · <b>Ctrl+C</b> copy · <b>Ctrl+V</b> paste · <b>Del</b> clear · <b>Ctrl+Z</b> undo</span>
+        {multiSel && <span style={{ fontWeight:700, color:BLUE.accent }}>{selSize()} cells selected</span>}
+      </div>
+      {toast && <div style={{ position:"fixed", right:20, bottom:20, background:C.navy, color:"#fff", padding:"10px 15px", borderRadius:10, fontSize:12.5, fontWeight:600, boxShadow:"0 10px 26px rgba(20,35,62,.28)", zIndex:80 }}>{toast}</div>}
       {shareRow && <ShareModal r={shareRow} phones={memberPhones} team={team} onClose={()=>setShareRow(null)} />}
     </div>
   );
