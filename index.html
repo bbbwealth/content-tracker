@@ -97,8 +97,9 @@ const COLLAB_TYPE = {
 // named so re-ordering stages can never break the logic
 const ST = { IDEA:"Idea", SCRIPTED:"Scripted", FILMED:"Filmed", EDITED:"Edited", SCHEDULED:"Scheduled", PUBLISHED:"Published", HOLD:"On Hold" };
 const STAGES = [ST.IDEA, ST.SCRIPTED, ST.FILMED, ST.EDITED, ST.SCHEDULED, ST.PUBLISHED, ST.HOLD];
-const STAGE_TINT = { [ST.IDEA]:"#E8EEF7", [ST.SCRIPTED]:"#E4EFFB", [ST.FILMED]:"#DCE8FB", [ST.EDITED]:"#FCE9D6", [ST.SCHEDULED]:"#E7DEF5", [ST.PUBLISHED]:"#D6EFD6", [ST.HOLD]:"#F9D7D7" };
-const STAGE_INK = { [ST.IDEA]:"#3E4A63", [ST.SCRIPTED]:"#2A5AA8", [ST.FILMED]:"#1E3F86", [ST.EDITED]:"#8a5a1a", [ST.SCHEDULED]:"#4B2E9E", [ST.PUBLISHED]:"#15724A", [ST.HOLD]:"#A11" };
+// one clearly distinct hue per stage — grey → blue → purple → amber → cyan → green, red for hold
+const STAGE_TINT = { [ST.IDEA]:"#ECEEF2", [ST.SCRIPTED]:"#D2E4FD", [ST.FILMED]:"#E3D6FB", [ST.EDITED]:"#FDE4BF", [ST.SCHEDULED]:"#B6E7F4", [ST.PUBLISHED]:"#CDEBD4", [ST.HOLD]:"#FBD0D0" };
+const STAGE_INK  = { [ST.IDEA]:"#55617A", [ST.SCRIPTED]:"#1B4F9C", [ST.FILMED]:"#4B2E9E", [ST.EDITED]:"#8A5212", [ST.SCHEDULED]:"#0E5C72", [ST.PUBLISHED]:"#146B45", [ST.HOLD]:"#A11B1B" };
 const TOPICS = ["Credit Card","Saving Platform","Digital Banks","Bank FD","Business","Market","Subsidy","AI","Complains"];
 // maps every legacy idea/pipeline status onto the merged stages
 const LEGACY_STAGE = { "Backlog":ST.IDEA, "Approved":ST.IDEA, "Scripting":ST.SCRIPTED, "In Progress":ST.SCRIPTED, "Footage Ready":ST.FILMED, "Design":ST.FILMED, "Review":ST.EDITED, "Posted":ST.PUBLISHED, "Parked":ST.HOLD, "Killed":ST.HOLD };
