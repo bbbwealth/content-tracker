@@ -463,7 +463,7 @@ function App() {
     const rows = data.pipeline.filter((r)=>r._id!==sourceId).map((r)=>{
       if (r._id !== targetId) return r;
       const m = {};
-      ["views","reach","likes","comments","shares","saves","follows","importedAt"].forEach((k)=>{ if (src[k]!==undefined && src[k]!=="") m[k]=src[k]; });
+      ["views","reach","likes","comments","shares","saves","follows","importedAt","publishedAt"].forEach((k)=>{ if (src[k]!==undefined && src[k]!=="") m[k]=src[k]; });
       // credit the followers to the content's creator — its assigned Writer first, then the submitter,
       // and only fall back to any creator already on the imported post
       const creditTo = r.scriptWriter || r.owner || r.by || src.owner || src.by || "";
@@ -668,18 +668,19 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         const metrics = {};
         ["views","reach","likes","comments","shares","saves","follows"].forEach((k)=>{ if (col[k]>=0 && String(r[col[k]]||"").trim()!=="") metrics[k] = num(r[col[k]]); });
         if (!Object.keys(metrics).length) return;
+        const pubDate = col.date>=0 ? parseMetaDate(r[col.date]) : ""; // the actual publish date from Meta
         let p = null;
         if (link) p = pieces.find((x)=>x.contentLink && norm(x.contentLink)===norm(link));
         if (!p) { const d = norm(title); p = pieces.find((x)=>x.title && (norm(x.title)===d || (norm(x.title).length>8 && d.includes(norm(x.title))))); }
-        if (p) updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp } });
+        if (p) updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, publishedAt:pubDate } });
         else {
           const ty = col.type>=0 ? String(r[col.type]||"").trim() : "";
           creates.push({
-            title, ...metrics, importedAt:stamp, imported:1,
+            title, ...metrics, importedAt:stamp, imported:1, publishedAt:pubDate,
             brand: col.account>=0 ? brandFor(r[col.account]) : "",
             type: (L.types||[]).includes(ty) ? ty : "",
-            target: col.date>=0 ? parseMetaDate(r[col.date]) : "",
-            dateAdded: col.date>=0 ? parseMetaDate(r[col.date]) : "",
+            target: pubDate,
+            dateAdded: pubDate,
             status: ST.PUBLISHED, kind:"Organic", category:"", platform: (col.account>=0 && /instagram/i.test(String(r[col.account]||""))) ? "Instagram" : "Instagram",
             contentLink: link, scriptLink:"", footageLink:"", notes:"", adminComment:"", crossPost:[], owner:"", by:"", scriptWriter:"", stamps:{},
           });
@@ -919,7 +920,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, o
                 <tbody>
                   {list.map((r)=>(
                     <tr key={r._id}>
-                      <td style={{ fontSize:11.5, color:C.sub, padding:"6px 6px" }}>{r.target?isoToDisp(r.target):"—"}</td>
+                      <td style={{ fontSize:11.5, color:C.sub, padding:"6px 6px" }}>{(r.publishedAt||r.target)?isoToDisp(r.publishedAt||r.target):"—"}</td>
                       <td><HoverSelect value={creator(r)} options={team} onChange={(v)=>onPatch(r._id,{owner:v})} placeholder="set creator" style={{ fontWeight:400, background:creator(r)?"transparent":"#FFF3CC", borderRadius:5 }} /></td>
                       <td style={{ padding:"6px 6px" }}><BrandTag b={r.brand} weight={400} /></td>
                       <td style={{ fontSize:12, fontWeight:400, padding:"6px 6px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.imported ? <span title="Imported from Meta — not yet linked to a planned idea" style={{ color:BLUE.accent, fontWeight:800, marginRight:4 }}>⬆</span> : null}{r.title||"(untitled)"}</td>
