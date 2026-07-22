@@ -194,7 +194,7 @@ const KEY = "bbb-content-os-v1";
 /* ── atoms ── */
 const Pill = ({ children, bg, fg, style }) => (<span style={{ background:bg, color:fg, padding:"3px 9px", borderRadius:999, fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:".2px", ...style }}>{children}</span>);
 const StatusPill = ({ s }) => <Pill bg={STATUS_TINT[s] || "#EEF1F6"} fg={statusInk(s)}>{s}</Pill>;
-const BrandTag = ({ b }) => (<span title={b} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:600, color:C.ink, minWidth:0, maxWidth:"100%" }}><span style={{ width:8, height:8, borderRadius:3, background:BRAND_DOT[b]||C.sub, flexShrink:0 }} /><span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b}</span></span>);
+const BrandTag = ({ b, weight }) => (<span title={b} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:weight!=null?weight:600, color:C.ink, minWidth:0, maxWidth:"100%" }}><span style={{ width:8, height:8, borderRadius:3, background:BRAND_DOT[b]||C.sub, flexShrink:0 }} /><span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b}</span></span>);
 const TypePill = ({ t }) => { const c = COLLAB_TYPE[t]; if (!c) return null; return <span title={t}><Pill bg={c.bg} fg={c.fg}>{c.short}</Pill></span>; };
 const IconBtn = ({ onClick, children, title, danger }) => (
   <button onClick={onClick} title={title} style={{ border:"none", background:"transparent", cursor:"pointer", color:danger?C.red:C.sub, padding:5, borderRadius:7, display:"inline-flex", lineHeight:0 }}
@@ -915,11 +915,11 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, o
                   {list.map((r)=>(
                     <tr key={r._id}>
                       <td style={{ fontSize:11.5, color:C.sub, padding:"6px 6px" }}>{r.target?isoToDisp(r.target):"—"}</td>
-                      <td><HoverSelect value={creator(r)} options={team} onChange={(v)=>onPatch(r._id,{owner:v})} placeholder="set creator" style={{ fontWeight:creator(r)?700:400, background:creator(r)?"transparent":"#FFF3CC", borderRadius:5 }} /></td>
-                      <td style={{ padding:"6px 6px" }}><BrandTag b={r.brand} /></td>
-                      <td style={{ fontSize:12, fontWeight:600, padding:"6px 6px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.imported ? <span title="Imported from Meta — not yet linked to a planned idea" style={{ color:BLUE.accent, fontWeight:800, marginRight:4 }}>⬆</span> : null}{r.title||"(untitled)"}</td>
+                      <td><HoverSelect value={creator(r)} options={team} onChange={(v)=>onPatch(r._id,{owner:v})} placeholder="set creator" style={{ fontWeight:400, background:creator(r)?"transparent":"#FFF3CC", borderRadius:5 }} /></td>
+                      <td style={{ padding:"6px 6px" }}><BrandTag b={r.brand} weight={400} /></td>
+                      <td style={{ fontSize:12, fontWeight:400, padding:"6px 6px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.imported ? <span title="Imported from Meta — not yet linked to a planned idea" style={{ color:BLUE.accent, fontWeight:800, marginRight:4 }}>⬆</span> : null}{r.title||"(untitled)"}</td>
                       {metricCols.map((m)=>(
-                        <td key={m[0]}><InlineText type="number" value={r[m[0]]==null?"":r[m[0]]} onCommit={(v)=>onPatch(r._id,{[m[0]]:Number(v)||0})} placeholder="0" style={m[0]==="follows"?{ fontWeight:800, color:"#15724A" }:undefined} /></td>
+                        <td key={m[0]}><InlineText type="number" value={r[m[0]]==null?"":r[m[0]]} onCommit={(v)=>onPatch(r._id,{[m[0]]:Number(v)||0})} placeholder="0" style={m[0]==="follows"?{ color:"#15724A" }:undefined} /></td>
                       ))}
                       <td style={{ fontSize:11, color:C.sub, padding:"6px 6px" }}>{r.importedAt?isoToDisp(r.importedAt):"—"}</td>
                       <td style={{ textAlign:"center", borderRight:"none", padding:0 }}><IconBtn title="Link this to a planned idea on Content" onClick={()=>setLinkRow(r)}><Share2 size={12} /></IconBtn></td>
@@ -1073,9 +1073,11 @@ function HoverSelect({ value, options, onChange, placeholder, allLabel, allValue
   const onKey = (e)=>{
     if (e.altKey && (e.key==="ArrowDown" || e.key==="ArrowUp")) { e.preventDefault(); e.stopPropagation(); setOpen((o)=>!o); return; } // Alt+Down opens, like Excel validation
     if (e.key==="ArrowDown" || e.key==="ArrowUp") {
-      e.preventDefault(); e.stopPropagation(); // change the value in place, don't jump rows (like a native select)
-      step(e.key==="ArrowDown" ? 1 : -1);
-    } else if (e.key==="Enter") { if (open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } /* closed: bubble to grid → commit and move down */ }
+      if (open) { e.preventDefault(); e.stopPropagation(); step(e.key==="ArrowDown" ? 1 : -1); } // OPEN: step through options
+      // CLOSED: do nothing here — let the arrow bubble so the grid moves between rows
+      return;
+    }
+    if (e.key==="Enter") { if (open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } /* closed: bubble to grid → move down */ }
     else if (e.key==="Escape") { if(open){ e.preventDefault(); e.stopPropagation(); } setOpen(false); }
     else if (e.key==="Backspace" || e.key==="Delete") { e.preventDefault(); onChange(clearV); }
     else if (e.key.length===1 && !e.ctrlKey && !e.metaKey) { const f = opts.find((o)=>o.l.toLowerCase().startsWith(e.key.toLowerCase())); if (f) onChange(f.v); }
@@ -1313,8 +1315,9 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
     if (e.key === "Escape") { setSel(null); el.blur(); return; }
     if (e.key === "Tab") { e.preventDefault(); if (e.shiftKey) { nc-=1; if(nc<0){ nc=NCOL-1; nr-=1; } } else { nc+=1; if(nc>NCOL-1){ nc=0; nr+=1; } } move(nr, nc); return; }
     if (e.key === "Enter") { e.preventDefault(); move(nr + (e.shiftKey ? -1 : 1), nc); return; }
-    if (e.key === "ArrowDown" && !isSelect) { e.preventDefault(); move(nr+1, nc); return; }
-    if (e.key === "ArrowUp" && !isSelect) { e.preventDefault(); move(nr-1, nc); return; }
+    // ↑/↓ move between rows on every cell type; an OPEN dropdown swallows them first (to step options), so these only fire when it's closed
+    if (e.key === "ArrowDown") { e.preventDefault(); move(nr+1, nc); return; }
+    if (e.key === "ArrowUp") { e.preventDefault(); move(nr-1, nc); return; }
     // horizontal: only jump cells once the caret is at the input's edge (dropdowns jump immediately)
     if (e.key === "ArrowRight" && atEnd) { e.preventDefault(); move(nr, nc+1); return; }
     if (e.key === "ArrowLeft" && atStart) { e.preventDefault(); move(nr, nc-1); return; }
