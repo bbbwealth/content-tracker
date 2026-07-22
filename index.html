@@ -464,7 +464,10 @@ function App() {
       if (r._id !== targetId) return r;
       const m = {};
       ["views","reach","likes","comments","shares","saves","follows","importedAt"].forEach((k)=>{ if (src[k]!==undefined && src[k]!=="") m[k]=src[k]; });
-      return withStamp({ ...r, ...m, status:ST.PUBLISHED, target: r.target || src.target, contentLink: r.contentLink || src.contentLink }, ST.PUBLISHED);
+      // credit the followers to the content's creator — its assigned Writer first, then the submitter,
+      // and only fall back to any creator already on the imported post
+      const creditTo = r.scriptWriter || r.owner || r.by || src.owner || src.by || "";
+      return withStamp({ ...r, ...m, owner: creditTo, status:ST.PUBLISHED, target: r.target || src.target, contentLink: r.contentLink || src.contentLink }, ST.PUBLISHED);
     });
     persist({ ...data, pipeline:rows });
   };
@@ -748,7 +751,9 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, o
   const [sortKey, setSortKey] = useState("follows");
   const [sortDir, setSortDir] = useState(-1);
   const toggleSort = (k)=>{ if (sortKey===k) setSortDir(sortDir*-1); else { setSortKey(k); setSortDir(k==="title"||k==="creator"?1:-1); } };
-  const pub = (rows||[]).filter((r)=>r.status===ST.PUBLISHED);
+  // Insight only holds performance data that came from Meta — either a raw import or a planned idea
+  // that an import was linked onto (link copies importedAt across). Plain pipeline pieces never appear here.
+  const pub = (rows||[]).filter((r)=>r.importedAt);
   const n = (v)=>Number(v)||0;
   const creator = (r)=>r.owner || r.by || "";
   const eng = (r)=>n(r.likes)+n(r.comments)+n(r.shares)+n(r.saves);
@@ -781,7 +786,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, o
     list.sort((a,b)=>{ const x=val(a), y=val(b); if(x===y) return 0; if(typeof x==="number") return (x-y)*sortDir; if(x==="") return 1; if(y==="") return -1; return (x<y?-1:1)*sortDir; });
   }
   // ── follower ledger per brand (uses every published row, not just the filtered view) ──
-  const allPub = (allRows || rows || []).filter((r)=>r.status===ST.PUBLISHED);
+  const allPub = (allRows || rows || []).filter((r)=>r.importedAt);
   const gainedBy = {};
   allPub.forEach((r)=>{ const b=r.brand||"—"; gainedBy[b]=(gainedBy[b]||0)+n(r.follows); });
   const shownBrands = (L.brands||[]).filter((b)=>!brandFilter || brandFilter==="All" || b===brandFilter);
@@ -855,7 +860,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, o
       {importing && <ImportModal pieces={rows||[]} lists={L} onApply={(l)=>l.forEach((m)=>onPatch(m.id, m.patch))} onCreate={onCreate} onClose={()=>setImporting(false)} />}
       {/* only offer pieces that actually went out (Published), that didn't come from Meta, and that haven't already taken metrics from a link */}
       {linkRow && <LinkModal source={linkRow} candidates={(allRows||rows||[]).filter((r)=>r._id!==linkRow._id && !r.imported && !r.importedAt && r.status===ST.PUBLISHED)} onLink={(tid)=>{ onLink(linkRow._id, tid); setLinkRow(null); }} onClose={()=>setLinkRow(null)} />}
-      {pub.length===0 ? <Empty>Nothing published yet. Mark a piece Published on Content, or import your Meta export.</Empty> : (
+      {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
         <div>
           {unattributed.length>0 && (
             <div style={{ background:"#FFF3CC", border:`1px solid ${C.yellow}`, borderRadius:10, padding:"10px 12px", fontSize:12.5, fontWeight:600, color:"#7a5b00", marginBottom:14 }}>
