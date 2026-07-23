@@ -610,9 +610,14 @@ const MONTHS = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul
 // "Sat 11 Jul 2026, 7:10 PM" -> "2026-07-11"  (also handles 2026-07-11 / 11/07/2026)
 const parseMetaDate = (s) => {
   const t = String(s||"").trim(); if (!t) return "";
-  let m = /(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/.exec(t);
-  if (m) { const mo = MONTHS[m[2].slice(0,3).toLowerCase()]; if (mo) return `${m[3]}-${mo}-${m[1].padStart(2,"0")}`; }
-  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const iso = (y,mo,d)=>`${y}-${mo}-${String(d).padStart(2,"0")}`;
+  // no year in the string (e.g. "Wed Jul 22") — assume the most recent occurrence, not a future date
+  const guessYear = (moNum, d)=>{ const now=new Date(); let y=now.getFullYear(); const cand=new Date(`${y}-${moNum}-${String(d).padStart(2,"0")}T00:00:00`); if (cand.getTime()-now.getTime() > 2*86400000) y-=1; return y; };
+  let m = /(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/.exec(t);                 // 11 Jul 2026
+  if (m) { const mo = MONTHS[m[2].slice(0,3).toLowerCase()]; if (mo) return iso(m[3], mo, m[1]); }
+  m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t); if (m) return `${m[1]}-${m[2]}-${m[3]}`; // ISO
+  m = /([A-Za-z]{3,})\s+(\d{1,2})(?!\d)/.exec(t);                        // Wed Jul 22 / Jul 22 (no year)
+  if (m) { const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; if (mo) return iso(guessYear(mo, m[2]), mo, m[2]); }
   return dispToIso(t.split(",")[0]) || "";
 };
 function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
@@ -640,9 +645,9 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
       const exact = (...keys)=>head.findIndex((h)=>keys.some((k)=>h===k));
       const col = {
         link: (()=>{ const p=find("permalink","posturl"); return p>=0 ? p : exact("link","url","postlink"); })(), // careful: "Link clicks" is NOT a permalink
-        title: (()=>{ const t=exact("title"); return t>=0?t:find("description","caption","posttext","message"); })(),
+        title: (()=>{ const t=exact("title"); return t>=0?t:find("titlecaption","description","caption","posttext","message"); })(),
         date: find("datepublished","publishtime","date"),
-        type: exact("type","posttype"),
+        type: (()=>{ const t=exact("type","posttype","contenttype"); return t>=0?t:find("contenttype","posttype"); })(),
         account: find("accounts","account","page"),
         views: (()=>{ const v=exact("views"); return v>=0?v:find("videoviews","plays","impressions"); })(),
         reach: exact("reach"),
@@ -660,19 +665,23 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         return b || "";
       };
       const updates = [], creates = [];
+      let skipped = 0;                 // rows with no usable title (blank / TOTAL) — the only rows we drop
+      const usedIds = new Set();       // an existing piece can only be matched by ONE import row, never collapsed
       const stamp = nowISO(); // when this data was imported
       rows.slice(hi+1).forEach((r)=>{
         const title = col.title>=0 ? String(r[col.title]||"").trim() : "";
-        if (!title || /^total$/i.test(title)) return;               // skip Meta's TOTAL row
+        if (!title || /^total\b/i.test(title)) { if (r.some((c)=>String(c||"").trim()!=="")) skipped++; return; } // skip Meta's "Total, all posts" / blank rows
         const link = col.link>=0 ? String(r[col.link]||"").trim() : "";
         const metrics = {};
         ["views","reach","likes","comments","shares","saves","follows"].forEach((k)=>{ if (col[k]>=0 && String(r[col[k]]||"").trim()!=="") metrics[k] = num(r[col[k]]); });
-        if (!Object.keys(metrics).length) return;
+        // a titled row is ALWAYS imported now — even if Meta left every metric blank (it comes in as 0s, editable)
         const pubDate = col.date>=0 ? parseMetaDate(r[col.date]) : ""; // the actual publish date from Meta
+        // match ONLY on an exact link or exact title — captions are long & unique, so they become their own row.
+        // (linking an import to a planned idea is done deliberately with the link button, not auto-guessed.)
         let p = null;
-        if (link) p = pieces.find((x)=>x.contentLink && norm(x.contentLink)===norm(link));
-        if (!p) { const d = norm(title); p = pieces.find((x)=>x.title && (norm(x.title)===d || (norm(x.title).length>8 && d.includes(norm(x.title))))); }
-        if (p) updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, publishedAt:pubDate } });
+        if (link) p = pieces.find((x)=>!usedIds.has(x._id) && x.contentLink && norm(x.contentLink)===norm(link));
+        if (!p) { const d = norm(title); p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d); }
+        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, publishedAt:pubDate } }); }
         else {
           const ty = col.type>=0 ? String(r[col.type]||"").trim() : "";
           creates.push({
@@ -686,7 +695,7 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
           });
         }
       });
-      setResult({ updates, creates, cols:Object.keys(col).filter((k)=>col[k]>=0) });
+      setResult({ updates, creates, skipped, cols:Object.keys(col).filter((k)=>col[k]>=0) });
     } catch (e) { setErr("Couldn't read that file: " + String((e&&e.message)||e)); }
     setBusy(false);
   };
@@ -707,9 +716,10 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
           {err && <div style={{ background:"#FBE4E6", color:"#A11", fontSize:12, fontWeight:600, padding:"9px 11px", borderRadius:8, marginTop:12 }}>{err}</div>}
           {result && (
             <div style={{ marginTop:14 }}>
-              <div style={{ display:"flex", gap:8, marginBottom:9 }}>
+              <div style={{ display:"flex", gap:8, marginBottom:9, flexWrap:"wrap" }}>
                 <span style={{ background:"#DCE8FB", color:"#1E3F86", borderRadius:7, padding:"4px 9px", fontSize:11.5, fontWeight:700 }}>{result.creates.length} new piece{result.creates.length===1?"":"s"}</span>
                 <span style={{ background:"#DCF0E4", color:"#15724A", borderRadius:7, padding:"4px 9px", fontSize:11.5, fontWeight:700 }}>{result.updates.length} updated</span>
+                {result.skipped>0 && <span title="Rows with no title (e.g. Meta's TOTAL row) — these are the only rows not imported" style={{ background:"#FBE3E3", color:"#A11B1B", borderRadius:7, padding:"4px 9px", fontSize:11.5, fontWeight:700 }}>{result.skipped} skipped (no title)</span>}
               </div>
               <div style={{ fontSize:11, color:C.sub, marginBottom:10 }}>Detected: {result.cols.join(", ")}</div>
               <div style={{ maxHeight:200, overflow:"auto", display:"grid", gap:6 }}>
