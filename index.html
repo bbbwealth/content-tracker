@@ -658,11 +658,16 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         follows: find("follows","newfollowers"),
       };
       if (col.views < 0 && col.likes < 0) { setErr("Couldn't find metric columns (Views / Likes) in that file."); setBusy(false); return; }
+      // brand comes straight from the file's Account(s): use the canonical brand name if the handle
+      // matches one of your brands, otherwise show the account handle itself (prettified) — never blank
+      const HANDLE_NAME = { madwithmoney:"Madeleine Learns", madeleinelearns:"Madeleine Learns", madeleinelifestyle:"Madeleine Lifestyle", bbbwealth:"BBBwealth", klmoney:"KL Money", klmoneyofficial:"KL Money" };
       const brandFor = (acct)=>{
         const first = String(acct||"").split(",")[0].trim(); if (!first) return "";
         const f = norm(first);
         const b = (L.brands||[]).find((x)=>norm(x)===f) || (L.brands||[]).find((x)=>f.includes(norm(x)) || norm(x).includes(f));
-        return b || "";
+        if (b) return b;
+        if (HANDLE_NAME[f]) return HANDLE_NAME[f];
+        return first.replace(/\b\w/g, (c)=>c.toUpperCase()); // show the handle from the file as-is
       };
       const updates = [], creates = [];
       let skipped = 0;                 // rows with no usable title (blank / TOTAL) — the only rows we drop
