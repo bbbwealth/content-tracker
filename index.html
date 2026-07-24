@@ -181,6 +181,7 @@ const SEED = {
     calStatus:["Planned","Confirmed","Scheduled","Posted","Delayed"],
     collabStatus:["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"],
     collabPayStatus:["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"],
+    collabDealType:["One-off","Campaign","Retainer"],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
     topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
@@ -232,7 +233,7 @@ const syncCalendar = (calendar, item, status) => {
 };
 const calStatusForPipe = (it) => (it.status === ST.PUBLISHED || it.status === "Posted") ? "Posted" : (it.status === ST.SCHEDULED ? "Scheduled" : "Planned");
 const syncsToCal = (it) => !!(it.target || it.status === ST.SCHEDULED || it.status === ST.PUBLISHED);
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {}; d.editors = d.editors || []; d.retainers = d.retainers || []; if (!d.lists.collabPayStatus) d.lists.collabPayStatus = ["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"];
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {}; d.editors = d.editors || []; d.retainers = d.retainers || []; if (!d.lists.collabPayStatus) d.lists.collabPayStatus = ["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"]; if (!d.lists.collabDealType) d.lists.collabDealType = ["One-off","Campaign","Retainer"];
   // ── one-time collab split: separate content status from payment status ──
   if (!d.settings.collabSplitV1) {
     d.lists.collabStatus = ["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"];
@@ -244,6 +245,24 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
       return { ...c, status, payStatus: pay };
     });
     d.settings.collabSplitV1 = true;
+  }
+  // ── one-time deal-shape unification: every collab gets a dealType + scope + progress; fold earlier retainer rows in ──
+  if (!d.settings.collabDealV1) {
+    d.collabs = (d.collabs || []).map((c) => {
+      let dealType = c.dealType;
+      if (!dealType) {
+        const ct = String(c.ctype || "").toLowerCase();
+        if (ct.includes("partner") || ct.includes("retainer") || ct.includes("long")) dealType = "Retainer";
+        else if (ct.includes("campaign")) dealType = "Campaign";
+        else dealType = "One-off";
+      }
+      return { ...c, dealType, qty: c.qty != null ? c.qty : 1, perMonth: c.perMonth || 0, months: c.months || 0, delivered: c.delivered || 0, dcu: !!c.dcu, start: c.start || c.briefDate || "", end: c.end || c.goLive || "" };
+    });
+    (d.retainers || []).forEach((r) => {
+      d.collabs.push({ _id: r._id || uid(), code: "", partner: r.partner || "", brand: r.brand || "", dealType: "Retainer", qty: 0, perMonth: r.perMonth || 0, months: r.months || 0, delivered: r.delivered || 0, dcu: !!r.dcu, fee: r.fee || "", status: "In Production", payStatus: r.payStatus || "Not Invoiced", start: r.start || "", end: r.end || "", pic: "", notes: r.notes || "" });
+    });
+    d.retainers = [];
+    d.settings.collabDealV1 = true;
   }
   // ── one-time merge: Idea Bank + Pipeline become a single board (data.ideas kept as an untouched archive) ──
   if (!d.settings.mergedV1) {
@@ -327,10 +346,10 @@ const fieldSets = (L) => ({
   ],
   collabs: [
     { k:"partner", l:"Partner / Client", t:"text", full:1 },
-    { k:"ctype", l:"Collab Type", t:"select", o:L.collabTypes }, { k:"brand", l:"Our Brand", t:"select", o:L.brands },
-    { k:"fee", l:"Fee (RM)", t:"number" },
-    { k:"deliverables", l:"Deliverables", t:"text", full:1 }, { k:"status", l:"Content status", t:"select", o:L.collabStatus }, { k:"payStatus", l:"Payment status", t:"select", o:L.collabPayStatus },
-    { k:"briefDate", l:"Brief Date", t:"date" }, { k:"contentDue", l:"Content Due", t:"date" }, { k:"goLive", l:"Go-Live", t:"date" },
+    { k:"dealType", l:"Deal Type", t:"select", o:L.collabDealType }, { k:"brand", l:"Our Brand", t:"select", o:L.brands },
+    { k:"fee", l:"Rate (RM)", t:"number" },
+    { k:"status", l:"Content status", t:"select", o:L.collabStatus }, { k:"payStatus", l:"Payment status", t:"select", o:L.collabPayStatus },
+    { k:"start", l:"Start", t:"date" }, { k:"end", l:"End / Go-Live", t:"date" },
     { k:"pic", l:"PIC", t:"select", o:L.team },
     { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
@@ -499,11 +518,7 @@ function App() {
   // editor payouts: rate + payee details, and submitted invoices
   const savePayout = (name, patch) => persist({ ...data, payouts: { ...(data.payouts||{}), [name]: { ...((data.payouts||{})[name]||{}), ...patch } } });
   const submitInvoice = (name, invoice) => { const cur=(data.payouts||{})[name]||{}; persist({ ...data, payouts:{ ...(data.payouts||{}), [name]:{ ...cur, invoices:[...(cur.invoices||[]), invoice] } } }); };
-  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, ctype:"", brand:(L.brands[0]||""), fee:"", deliverables:"", status:"Pitching", payStatus:"Not Invoiced", briefDate:"", contentDue:"", goLive:"", pic:"", notes:"" }] }); };
-  // long-term / retainer projects: cadence + progress + DCU
-  const patchRetainer = (id, patch) => persist({ ...data, retainers: (data.retainers||[]).map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
-  const quickAddRetainer = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, retainers:[...(data.retainers||[]), { _id:uid(), partner:t, brand:(L.brands[0]||""), start:"", end:"", perMonth:3, months:6, delivered:0, dcu:false, fee:"", payStatus:"Not Invoiced", notes:"" }] }); };
-  const delRetainer = (id) => persist({ ...data, retainers:(data.retainers||[]).filter((r)=>r._id!==id) });
+  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, brand:(L.brands[0]||""), dealType:"One-off", qty:1, perMonth:0, months:0, delivered:0, dcu:false, fee:"", status:"Pitching", payStatus:"Not Invoiced", start:"", end:"", pic:"", notes:"" }] }); };
   // account-level follower count per brand, keyed in by hand + stamped with the day it was read
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
   const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
@@ -609,7 +624,7 @@ function App() {
             ? <EditorContent rows={data.pipeline.filter((r)=>!r.imported && r.editor===myName)} myName={myName} onSetStatus={(id,s)=>setPipelineStatus(id,s)} />
             : <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />)}
           {tab==="calendar" && <Calendar rows={filt(data.pipeline).filter((r)=>!r.imported)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} retainers={data.retainers||[]} onPatchRetainer={patchRetainer} onQuickAddRetainer={quickAddRetainer} onDelRetainer={delRetainer} />}
+          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
           {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} />}
@@ -650,6 +665,8 @@ const MONTHS = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul
 const parseMetaDate = (s) => {
   const t = String(s||"").trim(); if (!t) return "";
   const iso = (y,mo,d)=>`${y}-${mo}-${String(d).padStart(2,"0")}`;
+  // Excel/Sheets serial date (e.g. 46204) — days since 1899-12-30
+  if (/^\d{5}(\.\d+)?$/.test(t)) { const dt = new Date(Math.round((Number(t)-25569)*86400000)); if (!isNaN(dt)) return iso(dt.getUTCFullYear(), String(dt.getUTCMonth()+1).padStart(2,"0"), dt.getUTCDate()); }
   // no year in the string (e.g. "Wed Jul 22") — assume the most recent occurrence, not a future date
   const guessYear = (moNum, d)=>{ const now=new Date(); let y=now.getFullYear(); const cand=new Date(`${y}-${moNum}-${String(d).padStart(2,"0")}T00:00:00`); if (cand.getTime()-now.getTime() > 2*86400000) y-=1; return y; };
   let m = /(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})/.exec(t);                 // 11 Jul 2026
@@ -659,47 +676,54 @@ const parseMetaDate = (s) => {
   if (m) { const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; if (mo) return iso(guessYear(mo, m[2]), mo, m[2]); }
   return dispToIso(t.split(",")[0]) || "";
 };
+// ── parse the raw Meta "Content" table when it's copy-pasted straight from the browser ──
+// Each post is a block of lines: [platform lines] · caption · type · ["Crossposted"] · accounts · date · Reach · Views · Interactions · Follows
+const PLATFORM_LINES = new Set(["instagram","facebook","threads","tiktok","youtube","twitter","x"]);
+const POST_TYPES = new Set(["reel","reels","carousel","video","photo","image","images","story","stories","post","posts","live","album","text","link","short","shorts"]);
+const HEADER_WORDS = new Set(["title","date published","datepublished","reach","views","interactions","follows","engagement","content type","contenttype","account","accounts","permalink","impressions","comments","likes","shares","saves"]);
+const isMetaDateLine = (l)=> /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(l) && /\d{1,2}\s*:\s*\d{2}\s*[ap]\.?m/i.test(l);
+const isMetaNumLine = (l)=> /^[\d.,]+$/.test(l) || l==="—" || l==="-";
+const parseMetaPaste = (text) => {
+  const lines = String(text||"").split(/\r?\n/).map((s)=>s.trim()).filter((s)=>s!=="");
+  const L = lines.filter((l)=>!HEADER_WORDS.has(l.toLowerCase()));
+  const out = [];
+  let i = 0;
+  while (i < L.length) {
+    // a post starts with one or more platform lines
+    if (!PLATFORM_LINES.has(L[i].toLowerCase())) { i++; continue; }
+    const platforms = [];
+    while (i < L.length && PLATFORM_LINES.has(L[i].toLowerCase())) { platforms.push(L[i]); i++; }
+    // caption — everything up to the content-type line (captions can wrap across lines)
+    const cap = [];
+    while (i < L.length && !POST_TYPES.has(L[i].toLowerCase()) && !PLATFORM_LINES.has(L[i].toLowerCase()) && !isMetaDateLine(L[i])) { cap.push(L[i]); i++; }
+    const title = cap.join(" ").replace(/\s+/g, " ").trim();
+    let type = "";
+    if (i < L.length && POST_TYPES.has(L[i].toLowerCase())) { type = L[i]; i++; }
+    if (i < L.length && L[i].toLowerCase() === "crossposted") i++;       // skip the "Crossposted" tag
+    let account = "";
+    if (i < L.length && !isMetaDateLine(L[i]) && !isMetaNumLine(L[i]) && !PLATFORM_LINES.has(L[i].toLowerCase())) { account = L[i]; i++; }
+    let dateStr = "";
+    if (i < L.length && isMetaDateLine(L[i])) { dateStr = L[i]; i++; }
+    const nums = [];
+    while (i < L.length && nums.length < 4 && isMetaNumLine(L[i])) { nums.push(L[i]); i++; }
+    if (!title) continue;               // no caption = not a real post, skip
+    out.push({ title, type, account, dateStr, reach:nums[0], views:nums[1], interactions:nums[2], follows:nums[3], crossPost:platforms });
+  }
+  return out;
+};
 function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [raw, setRaw] = useState("");
   const L = lists || {};
   const num = (v)=>{ const n = Number(String(v==null?"":v).replace(/[^0-9.-]/g,"")); return isNaN(n)?0:n; };
-  const readRows = async (file) => {
-    const isCsv = /\.csv$/i.test(file.name);
-    if (isCsv) return parseCSV(await file.text());
-    if (typeof window.XLSX === "undefined") throw new Error("Spreadsheet reader didn't load — check your connection, or save the file as CSV.");
-    const wb = window.XLSX.read(new Uint8Array(await file.arrayBuffer()), { type:"array" }); // must be a byte array, not a raw ArrayBuffer
-    return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:false, defval:"" });
-  };
-  const handle = async (file) => {
+  const handle = () => {
     setErr(""); setResult(null); setBusy(true);
     try {
-      const rows = await readRows(file);
-      if (rows.length < 2) { setErr("That file has no data rows."); setBusy(false); return; }
-      let hi = rows.findIndex((r)=>r.some((c)=>/^(title|permalink|post id|description|caption|date published|publish time)$/i.test(String(c).trim())));
-      if (hi < 0) hi = 0;
-      const head = rows[hi].map((h)=>norm(h));
-      const find = (...keys)=>head.findIndex((h)=>keys.some((k)=>h.includes(k)));
-      const exact = (...keys)=>head.findIndex((h)=>keys.some((k)=>h===k));
-      const col = {
-        link: (()=>{ const p=find("permalink","posturl"); return p>=0 ? p : exact("link","url","postlink"); })(), // careful: "Link clicks" is NOT a permalink
-        title: (()=>{ const t=exact("title"); return t>=0?t:find("titlecaption","description","caption","posttext","message"); })(),
-        date: find("datepublished","publishtime","date"),
-        type: (()=>{ const t=exact("type","posttype","contenttype"); return t>=0?t:find("contenttype","posttype"); })(),
-        account: find("accounts","account","page"),
-        views: (()=>{ const v=exact("views"); return v>=0?v:find("videoviews","plays","impressions"); })(),
-        reach: exact("reach"),
-        interactions: find("interactions","engagement"),
-        likes: find("likesreactions","likes","reactions"),
-        comments: find("comments"),
-        shares: find("shares"),
-        saves: find("saves","saved","bookmarks"),
-        follows: find("follows","newfollowers"),
-      };
-      if (col.views < 0 && col.likes < 0) { setErr("Couldn't find metric columns (Views / Likes) in that file."); setBusy(false); return; }
-      // brand comes straight from the file's Account(s): use the canonical brand name if the handle
-      // matches one of your brands, otherwise show the account handle itself (prettified) — never blank
+      const posts = parseMetaPaste(raw);
+      if (posts.length === 0) { setErr("Couldn't find any posts in that text. Paste the rows straight from Meta Business Suite → Content (caption, type, account, date, then the four numbers)."); setBusy(false); return; }
+      // brand comes straight from the pasted Account(s): canonical brand name if the handle matches a brand, else the prettified handle
       const HANDLE_NAME = { madwithmoney:"Madeleine Learns", madeleinelearns:"Madeleine Learns", madeleinelifestyle:"Madeleine Lifestyle", bbbwealth:"BBBwealth", klmoney:"KL Money", klmoneyofficial:"KL Money" };
       const brandFor = (acct)=>{
         const first = String(acct||"").split(",")[0].trim(); if (!first) return "";
@@ -707,58 +731,51 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         const b = (L.brands||[]).find((x)=>norm(x)===f) || (L.brands||[]).find((x)=>f.includes(norm(x)) || norm(x).includes(f));
         if (b) return b;
         if (HANDLE_NAME[f]) return HANDLE_NAME[f];
-        return first.replace(/\b\w/g, (c)=>c.toUpperCase()); // show the handle from the file as-is
+        return first.replace(/\b\w/g, (c)=>c.toUpperCase());
       };
       const updates = [], creates = [];
-      let skipped = 0;                 // rows with no usable title (blank / TOTAL) — the only rows we drop
-      const usedIds = new Set();       // an existing piece can only be matched by ONE import row, never collapsed
-      const stamp = nowISO(); // when this data was imported (date)
-      const stampFull = localDateTime(); // date + time of this import run
-      rows.slice(hi+1).forEach((r)=>{
-        const title = col.title>=0 ? String(r[col.title]||"").trim() : "";
-        if (!title || /^total\b/i.test(title)) { if (r.some((c)=>String(c||"").trim()!=="")) skipped++; return; } // skip Meta's "Total, all posts" / blank rows
-        const link = col.link>=0 ? String(r[col.link]||"").trim() : "";
+      let skipped = 0;
+      const usedIds = new Set();       // an existing piece can only be matched by ONE pasted post
+      const stamp = nowISO();
+      const stampFull = localDateTime();
+      posts.forEach((r)=>{
+        const title = String(r.title||"").trim();
+        if (!title || /^total\b/i.test(title)) { skipped++; return; }
         const metrics = {};
-        ["views","reach","interactions","likes","comments","shares","saves","follows"].forEach((k)=>{ if (col[k]>=0 && String(r[col[k]]||"").trim()!=="") metrics[k] = num(r[col[k]]); });
-        // a titled row is ALWAYS imported now — even if Meta left every metric blank (it comes in as 0s, editable)
-        const pubDate = col.date>=0 ? parseMetaDate(r[col.date]) : ""; // the actual publish date from Meta
-        // match ONLY on an exact link or exact title — captions are long & unique, so they become their own row.
-        // (linking an import to a planned idea is done deliberately with the link button, not auto-guessed.)
-        let p = null;
-        if (link) p = pieces.find((x)=>!usedIds.has(x._id) && x.contentLink && norm(x.contentLink)===norm(link));
-        if (!p) { const d = norm(title); p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d); }
-        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, importedAtTime:stampFull, publishedAt:pubDate } }); }
+        ["reach","views","interactions","follows"].forEach((k)=>{ if (r[k]!=null && String(r[k]).trim()!=="") metrics[k] = num(r[k]); });
+        const pubDate = parseMetaDate(r.dateStr);
+        // match only on exact title (captions are long & unique) — linking to a planned idea stays a deliberate action
+        const d = norm(title);
+        const p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d);
+        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, importedAtTime:stampFull, ...(pubDate ? { publishedAt:pubDate } : {}) } }); }
         else {
-          const ty = col.type>=0 ? String(r[col.type]||"").trim() : "";
+          const ty = String(r.type||"").trim();
+          const tyDisp = ty ? ty.charAt(0).toUpperCase()+ty.slice(1).toLowerCase() : "";
           creates.push({
             title, ...metrics, importedAt:stamp, importedAtTime:stampFull, imported:1, publishedAt:pubDate,
-            brand: col.account>=0 ? brandFor(r[col.account]) : "",
-            type: (L.types||[]).includes(ty) ? ty : "",
-            target: pubDate,
-            dateAdded: pubDate,
-            status: ST.PUBLISHED, kind:"Organic", category:"", platform: (col.account>=0 && /instagram/i.test(String(r[col.account]||""))) ? "Instagram" : "Instagram",
-            contentLink: link, scriptLink:"", footageLink:"", notes:"", adminComment:"", crossPost:[], owner:"", by:"", scriptWriter:"", stamps:{},
+            brand: brandFor(r.account),
+            type: tyDisp,
+            target: pubDate, dateAdded: pubDate,
+            status: ST.PUBLISHED, kind:"Organic", category:"", platform:"Instagram",
+            contentLink:"", scriptLink:"", footageLink:"", notes:"", adminComment:"", crossPost:(r.crossPost||[]), owner:"", by:"", scriptWriter:"", stamps:{},
           });
         }
       });
-      setResult({ updates, creates, skipped, cols:Object.keys(col).filter((k)=>col[k]>=0) });
-    } catch (e) { setErr("Couldn't read that file: " + String((e&&e.message)||e)); }
+      setResult({ updates, creates, skipped, cols:["title","type","account","date","reach","views","interactions","follows"] });
+    } catch (e) { setErr("Couldn't parse that text: " + String((e&&e.message)||e)); }
     setBusy(false);
   };
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:60, padding:16, backdropFilter:"blur(2px)" }}>
       <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"min(560px,100%)", maxHeight:"84vh", overflow:"auto", boxShadow:"0 24px 60px rgba(20,35,62,.28)" }}>
         <div style={{ background:C.navy, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ color:"#fff", fontWeight:700, fontSize:14.5 }}>Import insights from Meta (CSV)</div>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:14.5 }}>Import insights from Meta (paste)</div>
           <span style={{ cursor:"pointer" }} onClick={onClose}><X size={17} color="#9FB0CC" /></span>
         </div>
         <div style={{ padding:16 }}>
-          <div style={{ fontSize:12, color:C.sub, lineHeight:1.55, marginBottom:12 }}>Export from <b>Meta Business Suite → Content</b> (.xlsx or .csv). Posts already in your planner are <b>updated</b> with their numbers; anything new is <b>added as a Published piece</b>, so your whole back catalogue lands here.</div>
-          <label style={{ display:"block", border:`2px dashed ${C.line}`, borderRadius:12, padding:"18px", textAlign:"center", cursor:"pointer", background:"#F8F9FC" }}>
-            <div style={{ fontSize:13, fontWeight:700, color:C.navy }}>{busy ? "Reading…" : "Choose .xlsx or .csv file"}</div>
-            <div style={{ fontSize:11, color:C.sub, marginTop:4 }}>views · reach · likes · comments · shares · saves · follows</div>
-            <input type="file" accept=".csv,.xlsx,.xls,text/csv" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; if(f) handle(f); if(e.target) e.target.value=""; }} style={{ display:"none" }} />
-          </label>
+          <div style={{ fontSize:12, color:C.sub, lineHeight:1.55, marginBottom:10 }}>Open <b>Meta Business Suite → Content</b>, select the rows and <b>copy</b>, then paste below. Posts already in your planner are <b>updated</b> with their numbers; anything new is <b>added as a Published piece</b>. Order read per post: caption · type · account · date · <b>Reach · Views · Interactions · Follows</b>.</div>
+          <textarea value={raw} onChange={(e)=>setRaw(e.target.value)} placeholder={"Paste the Meta content rows here…\n\nInstagram\nFacebook\n留言 BOSS，发你AI万能指令…\nReel\nCrossposted\nmadwithmoney, madeleinelearns\nWed Jul 22, 7:19pm\n2,950\n22,954\n701\n49"} style={{ width:"100%", minHeight:150, resize:"vertical", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", fontSize:12, fontFamily:"ui-monospace, Menlo, monospace", lineHeight:1.5, boxSizing:"border-box" }} />
+          <button disabled={busy || !raw.trim()} onClick={handle} style={{ width:"100%", marginTop:10, border:"none", background:(busy||!raw.trim())?"#E6E9F0":C.navy, color:(busy||!raw.trim())?"#A9B2C4":"#fff", borderRadius:10, padding:"10px", fontSize:13, fontWeight:700, cursor:(busy||!raw.trim())?"default":"pointer" }}>{busy?"Reading…":"Parse & preview"}</button>
           {err && <div style={{ background:"#FBE4E6", color:"#A11", fontSize:12, fontWeight:600, padding:"9px 11px", borderRadius:8, marginTop:12 }}>{err}</div>}
           {result && (
             <div style={{ marginTop:14 }}>
@@ -2279,7 +2296,7 @@ function Calendar({ rows, allTeam, isAdmin, myName, dailyPosts, brands, brandFil
                 {c.items.slice(0,3).map((r)=>{ const posted=r.status===ST.PUBLISHED; const wc=WRITER_COLOR[r.scriptWriter]||"#94A0B4"; const wt=WRITER_TINT[r.scriptWriter]||"#F3F5F9"; return (
                   <div key={r._id} title={`${r.title}\n${[r.brand, r.type, r.scriptWriter && ("writer "+r.scriptWriter), r.status].filter(Boolean).join(" · ")}`} style={{ display:"flex", alignItems:"center", gap:4, background:wt, border:`1px solid ${wc}`, borderLeft:`3px solid ${wc}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
                     <span style={{ width:7, height:7, borderRadius:2, background:wc, flexShrink:0 }} />
-                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:C.ink, textDecoration:posted?"line-through":"none" }}>{r.title||"(untitled)"}</span>
+                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:C.ink }}>{r.title||"(untitled)"}</span>
                     {posted && <span title="Published" style={{ fontWeight:800, color:"#15724A", flexShrink:0, fontSize:11 }}>✓</span>}
                   </div>
                 ); })}
@@ -2328,15 +2345,53 @@ function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
   );
 }
 
-function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSaveDeck, retainers, onPatchRetainer, onQuickAddRetainer, onDelRetainer }) {
+function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSaveDeck }) {
   const L = lists || {};
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
   const brands = L.brands || [];
+  const dealTypes = L.collabDealType || ["One-off","Campaign","Retainer"];
   const [newPartner, setNewPartner] = useState("");
+  const [fType, setFType] = useState("");
+  const targetOf = (r)=> r.dealType==="Retainer" ? (Number(r.perMonth)||0)*(Number(r.months)||0) : (r.dealType==="Campaign" ? (Number(r.qty)||0) : 1);
+  const list = fType ? rows.filter((r)=>(r.dealType||"One-off")===fType) : rows;
   const fees = rows.reduce((s,c)=>s+(Number(c.fee)||0),0);
+  const totTarget = rows.reduce((s,c)=>s+targetOf(c),0);
+  const totDone = rows.reduce((s,c)=>s+Math.min(Number(c.delivered)||0, targetOf(c)||9999),0);
+  const dcuCount = rows.filter((c)=>c.dcu).length;
   const commitNew = ()=>{ const t=(newPartner||"").trim(); if(!t) return; onQuickAdd(t); setNewPartner(""); };
   const upload = async (b, f) => { if(!f) return; if(f.size>2*1024*1024){ alert("That file is over 2MB. Compress it to keep the app fast."); return; } try{ const du=await fileToDataURL(f); onSaveDeck(b,{ file:du, fileName:f.name }); }catch(e){ alert("Sorry, couldn't read that file."); } };
   const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 6px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  const miniInp = { width:40, border:`1px solid ${C.line}`, borderRadius:6, padding:"3px 5px", fontSize:12, fontFamily:"inherit", textAlign:"right" };
+  const DT_TINT = { "One-off":"#E8EEF7", "Campaign":"#DCE8FB", "Retainer":"#EAE2FB" };
+  const kpi = (v,l)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontSize:22, fontWeight:600, lineHeight:1, color:C.ink }}>{v}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:6 }}>{l}</div></div>);
+  // adaptive "scope" cell — interpretation depends on the deal type
+  const scopeCell = (r)=>{
+    const dt = r.dealType||"One-off";
+    if (dt==="Retainer") return (
+      <div style={{ display:"flex", alignItems:"center", gap:3, padding:"3px 6px", fontSize:12, whiteSpace:"nowrap" }}>
+        <input type="number" value={r.perMonth==null?"":r.perMonth} onChange={(e)=>onPatch(r._id,{perMonth:Number(e.target.value)||0})} style={miniInp} title="content per month" />
+        <span style={{ color:C.sub }}>/mo ×</span>
+        <input type="number" value={r.months==null?"":r.months} onChange={(e)=>onPatch(r._id,{months:Number(e.target.value)||0})} style={miniInp} title="months" />
+        <span style={{ color:C.sub }}>mo</span>
+      </div>
+    );
+    if (dt==="Campaign") return (
+      <div style={{ display:"flex", alignItems:"center", gap:5, padding:"3px 6px", fontSize:12, whiteSpace:"nowrap" }}>
+        <input type="number" value={r.qty==null?"":r.qty} onChange={(e)=>onPatch(r._id,{qty:Number(e.target.value)||0})} style={miniInp} title="number of content" />
+        <span style={{ color:C.sub }}>pieces</span>
+      </div>
+    );
+    return <div style={{ padding:"5px 8px", fontSize:12, color:C.sub }}>1 piece</div>;
+  };
+  const progressCell = (r)=>{ const t=targetOf(r); const done=Math.min(Number(r.delivered)||0, t||9999); const pct=t?Math.round(done/t*100):0; return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"4px 8px" }}>
+      <input type="number" value={r.delivered==null?"":r.delivered} onChange={(e)=>onPatch(r._id,{delivered:Number(e.target.value)||0})} style={miniInp} title="delivered so far" />
+      <div style={{ flex:1, minWidth:56 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, fontWeight:700, color:C.sub, marginBottom:2 }}><span>{done}/{t||"—"}</span><span>{t?pct+"%":""}</span></div>
+        <div style={{ height:6, borderRadius:4, background:"#EEF1F6", overflow:"hidden" }}><div style={{ width:(t?Math.min(pct,100):0)+"%", height:"100%", background:pct>=100?"#1FA463":BLUE.accent }} /></div>
+      </div>
+    </div>
+  ); };
   return (
     <div>
       <Toolbar title="Collabs & Partners" sub={`${rows.length} deals · RM ${fees.toLocaleString()} logged`} />
@@ -2367,35 +2422,51 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
           ); })}
         </div>
       </div>
-      {/* ── excel-like editable grid of deals ── */}
-      <div style={{ fontSize:12.5, fontWeight:700, color:C.navy, margin:"4px 2px 8px" }}>Deals &amp; campaigns</div>
+      {/* ── summary strip ── */}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+        {kpi(rows.length, "Deals")}
+        {kpi("RM "+fees.toLocaleString(), "Contracted value")}
+        {kpi(totDone+" / "+totTarget, "Content delivered")}
+        {kpi(dcuCount, "Deals with DCU")}
+      </div>
+      {/* ── unified deal grid — deal type drives the Scope cell ── */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, margin:"4px 2px 8px", flexWrap:"wrap" }}>
+        <span style={{ fontSize:12.5, fontWeight:700, color:C.navy }}>All deals</span>
+        <div style={{ flex:1 }} />
+        <span style={{ fontSize:11, color:C.sub }}>Filter</span>
+        <HoverSelect value={fType} options={dealTypes} allLabel="All types" allValue="" onChange={setFType} style={{ border:`1px solid ${C.line}`, borderRadius:8, padding:"5px 9px", fontSize:12, background:"#fff", color:C.ink, minWidth:110 }} />
+      </div>
       <div style={{ ...card(0), overflow:"visible" }}>
         <div style={{ overflow:"visible" }}>
-          <table className="xl" style={{ width:"100%" }}>
+          <table className="xl" style={{ width:"100%", minWidth:1180 }}>
             <colgroup>
-              <col /><col style={{ width:150 }} /><col style={{ width:104 }} /><col style={{ width:84 }} /><col style={{ width:128 }} /><col style={{ width:128 }} />
-              <col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:92 }} /><col style={{ width:40 }} />
+              <col /><col style={{ width:100 }} /><col style={{ width:112 }} /><col style={{ width:140 }} /><col style={{ width:148 }} /><col style={{ width:60 }} /><col style={{ width:88 }} />
+              <col style={{ width:126 }} /><col style={{ width:126 }} /><col style={{ width:98 }} /><col style={{ width:98 }} /><col style={{ width:86 }} /><col style={{ width:40 }} />
             </colgroup>
             <thead><tr style={{ background:BLUE.head }}>
-              {["Partner / Client","Type","Brand","Fee (RM)","Content status","Payment status","Brief","Content due","Go-live","PIC"].map((h)=><th key={h} style={th}>{h}</th>)}
+              {["Partner / Client","Brand","Deal type","Scope","Delivered / target","DCU","Rate (RM)","Content status","Payment status","Start","End","PIC"].map((h)=><th key={h} style={th}>{h}</th>)}
               <th style={{ ...th, borderRight:"none" }}></th>
             </tr></thead>
             <tbody>
               <tr className="addrow" style={{ background:"#FCFDFF" }}>
-                <td><input value={newPartner} onChange={(e)=>setNewPartner(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commitNew(); } }} onBlur={commitNew} placeholder="+ New partner, press Enter…" /></td>
-                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+                <td><input value={newPartner} onChange={(e)=>setNewPartner(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commitNew(); } }} onBlur={commitNew} placeholder="+ New deal — partner name, press Enter…" /></td>
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
               </tr>
-              {rows.map((r)=>(
+              {list.map((r)=>(
                 <tr key={r._id} style={{ background:"#fff" }}>
                   <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
-                  <td><HoverSelect value={r.ctype||""} options={L.collabTypes||[]} onChange={(v)=>onPatch(r._id,{ctype:v})} placeholder="type" /></td>
                   <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
+                  <td><HoverSelect value={r.dealType||"One-off"} options={dealTypes} onChange={(v)=>onPatch(r._id,{dealType:v})} placeholder="type" style={{ background:DT_TINT[r.dealType||"One-off"]||"transparent", color:C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
+                  <td>{scopeCell(r)}</td>
+                  <td>{progressCell(r)}</td>
+                  <td style={{ textAlign:"center" }}>
+                    <button type="button" onClick={()=>onPatch(r._id,{dcu:!r.dcu})} title="Digital Copyright Usage included?" style={{ border:`1.5px solid ${r.dcu?"#15724A":C.line}`, background:r.dcu?"#DCF0E4":"#fff", color:r.dcu?"#15724A":C.sub, borderRadius:7, padding:"4px 8px", fontSize:11, fontWeight:800, cursor:"pointer" }}>{r.dcu?"✓ Yes":"No"}</button>
+                  </td>
                   <td><InlineText type="number" value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
                   <td><HoverSelect value={r.status||""} options={L.collabStatus||[]} onChange={(v)=>onPatch(r._id,{status:v})} placeholder="status" style={{ background:STATUS_TINT[r.status]||"transparent", color:statusInk(r.status), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
                   <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
-                  <td><DateCell value={r.briefDate} onCommit={(v)=>onPatch(r._id,{briefDate:v})} /></td>
-                  <td><DateCell value={r.contentDue} onCommit={(v)=>onPatch(r._id,{contentDue:v})} /></td>
-                  <td><DateCell value={r.goLive} onCommit={(v)=>onPatch(r._id,{goLive:v})} /></td>
+                  <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
+                  <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
                   <td><HoverSelect value={r.pic||""} options={team} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
                   <td style={{ borderRight:"none", textAlign:"center" }}><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={12} /></IconBtn></td>
                 </tr>
@@ -2405,71 +2476,9 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
         </div>
       </div>
       {rows.length===0 && <Empty>No collabs yet. Type a partner name above and press Enter.</Empty>}
-
-      {/* ── long-term / retainer projects ── */}
-      <RetainerSection retainers={retainers||[]} brands={brands} L={L} onPatch={onPatchRetainer} onQuickAdd={onQuickAddRetainer} onDel={onDelRetainer} />
-    </div>
-  );
-}
-
-/* ── long-term / retainer project tracker (cadence + progress + DCU) ── */
-function RetainerSection({ retainers, brands, L, onPatch, onQuickAdd, onDel }) {
-  const [newP, setNewP] = useState("");
-  const commit = ()=>{ const t=(newP||"").trim(); if(!t) return; onQuickAdd(t); setNewP(""); };
-  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 6px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
-  const total = (r)=> (Number(r.perMonth)||0) * (Number(r.months)||0);
-  const bar = (r)=>{ const t=total(r); const done=Math.min(Number(r.delivered)||0, t||9999); const pct=t?Math.round(done/t*100):0; return (
-    <div style={{ minWidth:120 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, fontWeight:700, color:C.sub, marginBottom:3 }}><span>{done}/{t||"—"}</span><span>{t?pct+"%":""}</span></div>
-      <div style={{ height:7, borderRadius:4, background:"#EEF1F6", overflow:"hidden" }}><div style={{ width:(t?pct:0)+"%", height:"100%", background:pct>=100?"#1FA463":BLUE.accent, borderRadius:4 }} /></div>
-    </div>
-  ); };
-  return (
-    <div style={{ marginTop:20 }}>
-      <div style={{ fontSize:12.5, fontWeight:700, color:C.navy, margin:"4px 2px 4px", display:"flex", alignItems:"center", gap:7 }}><Briefcase size={15} /> Long-term / retainer projects</div>
-      <div style={{ fontSize:11, color:C.sub, margin:"0 2px 8px" }}>Track ongoing engagements — cadence (e.g. 3 posts / month), the contract window, delivery progress, and whether DCU (Digital Copyright Usage) is included.</div>
-      <div style={{ ...card(0), overflow:"visible" }}>
-        <div style={{ overflow:"visible" }}>
-          <table className="xl" style={{ width:"100%" }}>
-            <colgroup>
-              <col /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:78 }} /><col style={{ width:74 }} /><col style={{ width:150 }} /><col style={{ width:80 }} /><col style={{ width:96 }} /><col style={{ width:130 }} /><col style={{ width:40 }} />
-            </colgroup>
-            <thead><tr style={{ background:BLUE.head }}>
-              {["Partner / Client","Brand","Start","End","Per month","Months","Delivered / target","DCU","Fee (RM)","Payment"].map((h)=><th key={h} style={th}>{h}</th>)}
-              <th style={{ ...th, borderRight:"none" }}></th>
-            </tr></thead>
-            <tbody>
-              <tr className="addrow" style={{ background:"#FCFDFF" }}>
-                <td><input value={newP} onChange={(e)=>setNewP(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); } }} onBlur={commit} placeholder="+ New retainer, press Enter…" /></td>
-                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
-              </tr>
-              {(retainers||[]).map((r)=>(
-                <tr key={r._id} style={{ background:"#fff" }}>
-                  <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
-                  <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
-                  <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
-                  <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
-                  <td><InlineText type="number" value={r.perMonth} onCommit={(v)=>onPatch(r._id,{perMonth:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
-                  <td><InlineText type="number" value={r.months} onCommit={(v)=>onPatch(r._id,{months:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
-                  <td style={{ padding:"4px 8px" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                      <input type="number" value={r.delivered==null?"":r.delivered} onChange={(e)=>onPatch(r._id,{delivered:Number(e.target.value)||0})} style={{ width:44, border:`1px solid ${C.line}`, borderRadius:6, padding:"3px 5px", fontSize:12, fontFamily:"inherit", textAlign:"right" }} />
-                      {bar(r)}
-                    </div>
-                  </td>
-                  <td style={{ textAlign:"center" }}>
-                    <button type="button" onClick={()=>onPatch(r._id,{dcu:!r.dcu})} title="Digital Copyright Usage included?" style={{ border:`1.5px solid ${r.dcu?"#15724A":C.line}`, background:r.dcu?"#DCF0E4":"#fff", color:r.dcu?"#15724A":C.sub, borderRadius:7, padding:"4px 9px", fontSize:11, fontWeight:800, cursor:"pointer" }}>{r.dcu?"✓ Yes":"No"}</button>
-                  </td>
-                  <td><InlineText type="number" value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
-                  <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
-                  <td style={{ borderRight:"none", textAlign:"center" }}><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={12} /></IconBtn></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <div style={{ fontSize:11, color:C.sub, margin:"10px 2px 0", lineHeight:1.6 }}>
+        <b>Deal type</b> sets how <b>Scope</b> reads: <b>One-off</b> = a single piece · <b>Campaign</b> = a fixed batch (set the count) · <b>Retainer</b> = N pieces / month over M months (set both). <b>Delivered / target</b> tracks progress against that. Each deal carries its own <b>DCU</b> flag and <b>Rate</b>.
       </div>
-      {(retainers||[]).length===0 && <Empty>No retainer projects yet. Type a partner name above and press Enter.</Empty>}
     </div>
   );
 }
@@ -2674,7 +2683,7 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabDealType:"Collab Deal Type", collabTypes:"Collab Types", docStatus:"Doc Status" };
 const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
