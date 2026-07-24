@@ -84,7 +84,7 @@ const Trophy = (p) => <Svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path 
 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
-const BRAND_DOT = { BBBwealth:"#2D6CDF", "KL Money":"#F5C518", Madwithmoney:"#E8192C" };
+const BRAND_DOT = { BBBwealth:"#2D6CDF", "KL Money":"#F5C518", Madwithmoney:"#E8192C", "Madeleine Learns":"#B76E79", "Madeleine Lifestyle":"#D99A46" };
 const STATUS_TINT = { Idea:"#E8EEF7", Approved:"#FFF3CC", Scripting:"#FCE9D6", Design:"#E7DEF5", Review:"#FFE0CC", Scheduled:"#CFE8F7", Posted:"#D6EFD6", "On Hold":"#ECEEF2", Killed:"#F9D7D7", Backlog:"#E8EEF7", "In Progress":"#FCE9D6", Parked:"#ECEEF2", Planned:"#E8EEF7", Confirmed:"#FFF3CC", Delayed:"#F9D7D7", Pitching:"#E8EEF7", Negotiating:"#FFF3CC", "Contract Signed":"#FCE9D6", "In Production":"#E7DEF5", Delivered:"#FFE0CC", Invoiced:"#CFE8F7", Paid:"#D6EFD6", Completed:"#D6EFD6", Dropped:"#F9D7D7", Pending:"#FFF3CC", Done:"#D6EFD6", "N/A":"#ECEEF2", Scripted:"#FCE9D6", Filmed:"#E7DEF5", Edited:"#FFE0CC", Published:"#D6EFD6", "Not Invoiced":"#ECEEF2", "Partially Paid":"#FFF3CC" };
 const statusInk = (s) => (["Killed","Dropped","Delayed"].includes(s) ? "#A11" : C.ink);
 const PRIORITY = { High:{bg:C.red,fg:"#fff"}, Medium:{bg:C.yellow,fg:C.ink}, Low:{bg:"#DCE2EC",fg:C.sub} };
@@ -676,106 +676,107 @@ const parseMetaDate = (s) => {
   if (m) { const mo = MONTHS[m[1].slice(0,3).toLowerCase()]; if (mo) return iso(guessYear(mo, m[2]), mo, m[2]); }
   return dispToIso(t.split(",")[0]) || "";
 };
-// ── parse the raw Meta "Content" table when it's copy-pasted straight from the browser ──
-// Each post is a block of lines: [platform lines] · caption · type · ["Crossposted"] · accounts · date · Reach · Views · Interactions · Follows
-const PLATFORM_LINES = new Set(["instagram","facebook","threads","tiktok","youtube","twitter","x"]);
-const POST_TYPES = new Set(["reel","reels","carousel","video","photo","image","images","story","stories","post","posts","live","album","text","link","short","shorts"]);
-const HEADER_WORDS = new Set(["title","date published","datepublished","reach","views","interactions","follows","engagement","content type","contenttype","account","accounts","permalink","impressions","comments","likes","shares","saves"]);
-const isMetaDateLine = (l)=> /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(l) && /\d{1,2}\s*:\s*\d{2}\s*[ap]\.?m/i.test(l);
-const isMetaNumLine = (l)=> /^[\d.,]+$/.test(l) || l==="—" || l==="-";
-const parseMetaPaste = (text) => {
-  const lines = String(text||"").split(/\r?\n/).map((s)=>s.trim()).filter((s)=>s!=="");
-  const L = lines.filter((l)=>!HEADER_WORDS.has(l.toLowerCase()));
-  const out = [];
-  let i = 0;
-  while (i < L.length) {
-    // a post starts with one or more platform lines
-    if (!PLATFORM_LINES.has(L[i].toLowerCase())) { i++; continue; }
-    const platforms = [];
-    while (i < L.length && PLATFORM_LINES.has(L[i].toLowerCase())) { platforms.push(L[i]); i++; }
-    // caption — everything up to the content-type line (captions can wrap across lines)
-    const cap = [];
-    while (i < L.length && !POST_TYPES.has(L[i].toLowerCase()) && !PLATFORM_LINES.has(L[i].toLowerCase()) && !isMetaDateLine(L[i])) { cap.push(L[i]); i++; }
-    const title = cap.join(" ").replace(/\s+/g, " ").trim();
-    let type = "";
-    if (i < L.length && POST_TYPES.has(L[i].toLowerCase())) { type = L[i]; i++; }
-    if (i < L.length && L[i].toLowerCase() === "crossposted") i++;       // skip the "Crossposted" tag
-    let account = "";
-    if (i < L.length && !isMetaDateLine(L[i]) && !isMetaNumLine(L[i]) && !PLATFORM_LINES.has(L[i].toLowerCase())) { account = L[i]; i++; }
-    let dateStr = "";
-    if (i < L.length && isMetaDateLine(L[i])) { dateStr = L[i]; i++; }
-    const nums = [];
-    while (i < L.length && nums.length < 4 && isMetaNumLine(L[i])) { nums.push(L[i]); i++; }
-    if (!title) continue;               // no caption = not a real post, skip
-    out.push({ title, type, account, dateStr, reach:nums[0], views:nums[1], interactions:nums[2], follows:nums[3], crossPost:platforms });
-  }
-  return out;
+// ── Meta CSV/XLSX export: capture Description, Duration (sec), Publish time, Permalink, Views, Follows ──
+const parseMetaCsvDate = (s) => {
+  const t = String(s||"").trim(); if (!t) return "";
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);          // Meta exports use MM/DD/YYYY
+  if (m) return `${m[3]}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
+  return parseMetaDate(t);
 };
 function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [raw, setRaw] = useState("");
+  const [brand, setBrand] = useState("");
   const L = lists || {};
+  const brands = L.brands || [];
   const num = (v)=>{ const n = Number(String(v==null?"":v).replace(/[^0-9.-]/g,"")); return isNaN(n)?0:n; };
-  const handle = () => {
+  const readRows = async (file) => {
+    const isCsv = /\.csv$/i.test(file.name);
+    if (isCsv) return parseCSV(await file.text());
+    if (typeof window.XLSX === "undefined") throw new Error("Spreadsheet reader didn't load — check your connection, or save the file as CSV.");
+    const wb = window.XLSX.read(new Uint8Array(await file.arrayBuffer()), { type:"array" });
+    return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, raw:false, defval:"" });
+  };
+  const handle = async (file) => {
     setErr(""); setResult(null); setBusy(true);
     try {
-      const posts = parseMetaPaste(raw);
-      if (posts.length === 0) { setErr("Couldn't find any posts in that text. Paste the rows straight from Meta Business Suite → Content (caption, type, account, date, then the four numbers)."); setBusy(false); return; }
-      // brand comes straight from the pasted Account(s): canonical brand name if the handle matches a brand, else the prettified handle
-      const HANDLE_NAME = { madwithmoney:"Madeleine Learns", madeleinelearns:"Madeleine Learns", madeleinelifestyle:"Madeleine Lifestyle", bbbwealth:"BBBwealth", klmoney:"KL Money", klmoneyofficial:"KL Money" };
-      const brandFor = (acct)=>{
-        const first = String(acct||"").split(",")[0].trim(); if (!first) return "";
-        const f = norm(first);
-        const b = (L.brands||[]).find((x)=>norm(x)===f) || (L.brands||[]).find((x)=>f.includes(norm(x)) || norm(x).includes(f));
-        if (b) return b;
-        if (HANDLE_NAME[f]) return HANDLE_NAME[f];
-        return first.replace(/\b\w/g, (c)=>c.toUpperCase());
+      if (!brand) { setErr("Choose a brand first."); setBusy(false); return; }
+      const rows = await readRows(file);
+      if (rows.length < 2) { setErr("That file has no data rows."); setBusy(false); return; }
+      const head = rows[0].map((h)=>norm(h));
+      const find = (...keys)=>head.findIndex((h)=>keys.some((k)=>h.includes(k)));
+      const exact = (...keys)=>head.findIndex((h)=>keys.some((k)=>h===k));
+      const col = {
+        title:    (()=>{ const t=exact("description"); return t>=0?t:find("description","caption"); })(),
+        duration: find("durationsec","duration"),
+        date:     (()=>{ const d=exact("publishtime"); return d>=0?d:find("publishtime","publishdate","datepublished"); })(),
+        link:     (()=>{ const p=exact("permalink"); return p>=0?p:find("permalink","posturl"); })(),
+        views:    (()=>{ const v=exact("views"); return v>=0?v:find("views","plays","videoviews"); })(),
+        follows:  (()=>{ const f=exact("follows"); return f>=0?f:find("follows","newfollowers"); })(),
       };
+      if (col.title < 0) { setErr("Couldn't find a Description column in that file."); setBusy(false); return; }
+      const found = [];
+      if (col.title>=0) found.push("Description"); if (col.duration>=0) found.push("Duration"); if (col.date>=0) found.push("Publish time");
+      if (col.link>=0) found.push("Permalink"); if (col.views>=0) found.push("Views"); if (col.follows>=0) found.push("Follows");
       const updates = [], creates = [];
       let skipped = 0;
-      const usedIds = new Set();       // an existing piece can only be matched by ONE pasted post
+      const usedIds = new Set();
       const stamp = nowISO();
       const stampFull = localDateTime();
-      posts.forEach((r)=>{
-        const title = String(r.title||"").trim();
-        if (!title || /^total\b/i.test(title)) { skipped++; return; }
+      rows.slice(1).forEach((r)=>{
+        const title = String(r[col.title]||"").trim();
+        if (!title || /^total\b/i.test(title)) { if (r.some((c)=>String(c||"").trim()!=="")) skipped++; return; }
+        const link = col.link>=0 ? String(r[col.link]||"").trim() : "";
         const metrics = {};
-        ["reach","views","interactions","follows"].forEach((k)=>{ if (r[k]!=null && String(r[k]).trim()!=="") metrics[k] = num(r[k]); });
-        const pubDate = parseMetaDate(r.dateStr);
-        // match only on exact title (captions are long & unique) — linking to a planned idea stays a deliberate action
-        const d = norm(title);
-        const p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d);
-        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, importedAtTime:stampFull, ...(pubDate ? { publishedAt:pubDate } : {}) } }); }
+        if (col.views>=0   && String(r[col.views]||"").trim()!=="")   metrics.views   = num(r[col.views]);
+        if (col.follows>=0 && String(r[col.follows]||"").trim()!=="") metrics.follows = num(r[col.follows]);
+        const duration = col.duration>=0 ? num(r[col.duration]) : 0;
+        const pubDate = col.date>=0 ? parseMetaCsvDate(r[col.date]) : "";
+        // match on exact permalink first (most reliable), then exact title
+        let p = null;
+        if (link) p = pieces.find((x)=>!usedIds.has(x._id) && x.contentLink && norm(x.contentLink)===norm(link));
+        if (!p) { const d = norm(title); p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d); }
+        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, duration, importedAt:stamp, importedAtTime:stampFull, ...(link?{ contentLink:link }:{}), ...(pubDate ? { publishedAt:pubDate } : {}) } }); }
         else {
-          const ty = String(r.type||"").trim();
-          const tyDisp = ty ? ty.charAt(0).toUpperCase()+ty.slice(1).toLowerCase() : "";
           creates.push({
-            title, ...metrics, importedAt:stamp, importedAtTime:stampFull, imported:1, publishedAt:pubDate,
-            brand: brandFor(r.account),
-            type: tyDisp,
+            title, ...metrics, duration, importedAt:stamp, importedAtTime:stampFull, imported:1, publishedAt:pubDate,
+            brand,
+            type: duration>0 ? "Reel" : "Carousel",
             target: pubDate, dateAdded: pubDate,
             status: ST.PUBLISHED, kind:"Organic", category:"", platform:"Instagram",
-            contentLink:"", scriptLink:"", footageLink:"", notes:"", adminComment:"", crossPost:(r.crossPost||[]), owner:"", by:"", scriptWriter:"", stamps:{},
+            contentLink: link, scriptLink:"", footageLink:"", notes:"", adminComment:"", crossPost:[], owner:"", by:"", scriptWriter:"", stamps:{},
           });
         }
       });
-      setResult({ updates, creates, skipped, cols:["title","type","account","date","reach","views","interactions","follows"] });
-    } catch (e) { setErr("Couldn't parse that text: " + String((e&&e.message)||e)); }
+      setResult({ updates, creates, skipped, cols:found, brand });
+    } catch (e) { setErr("Couldn't read that file: " + String((e&&e.message)||e)); }
     setBusy(false);
   };
   return (
     <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:60, padding:16, backdropFilter:"blur(2px)" }}>
       <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"min(560px,100%)", maxHeight:"84vh", overflow:"auto", boxShadow:"0 24px 60px rgba(20,35,62,.28)" }}>
         <div style={{ background:C.navy, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ color:"#fff", fontWeight:700, fontSize:14.5 }}>Import insights from Meta (paste)</div>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:14.5 }}>Import insights from Meta (Excel / CSV)</div>
           <span style={{ cursor:"pointer" }} onClick={onClose}><X size={17} color="#9FB0CC" /></span>
         </div>
         <div style={{ padding:16 }}>
-          <div style={{ fontSize:12, color:C.sub, lineHeight:1.55, marginBottom:10 }}>Open <b>Meta Business Suite → Content</b>, select the rows and <b>copy</b>, then paste below. Posts already in your planner are <b>updated</b> with their numbers; anything new is <b>added as a Published piece</b>. Order read per post: caption · type · account · date · <b>Reach · Views · Interactions · Follows</b>.</div>
-          <textarea value={raw} onChange={(e)=>setRaw(e.target.value)} placeholder={"Paste the Meta content rows here…\n\nInstagram\nFacebook\n留言 BOSS，发你AI万能指令…\nReel\nCrossposted\nmadwithmoney, madeleinelearns\nWed Jul 22, 7:19pm\n2,950\n22,954\n701\n49"} style={{ width:"100%", minHeight:150, resize:"vertical", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", fontSize:12, fontFamily:"ui-monospace, Menlo, monospace", lineHeight:1.5, boxSizing:"border-box" }} />
-          <button disabled={busy || !raw.trim()} onClick={handle} style={{ width:"100%", marginTop:10, border:"none", background:(busy||!raw.trim())?"#E6E9F0":C.navy, color:(busy||!raw.trim())?"#A9B2C4":"#fff", borderRadius:10, padding:"10px", fontSize:13, fontWeight:700, cursor:(busy||!raw.trim())?"default":"pointer" }}>{busy?"Reading…":"Parse & preview"}</button>
+          <div style={{ fontSize:12, color:C.sub, lineHeight:1.55, marginBottom:12 }}>Export from <b>Meta Business Suite → Content</b> (.csv or .xlsx). It reads only <b>Description, Duration, Publish time, Permalink, Views, Follows</b>. Posts already in your planner are <b>updated</b>; anything new is <b>added as a Published piece</b> under the brand you pick.</div>
+          <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, marginBottom:6 }}>1 · Which brand is this file for?</div>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+            {brands.map((b)=>(
+              <button key={b} type="button" onClick={()=>setBrand(b)} style={{ display:"flex", alignItems:"center", gap:6, border:`1.5px solid ${brand===b?C.navy:C.line}`, background:brand===b?"#F3F6FC":"#fff", color:brand===b?C.navy:C.sub, borderRadius:9, padding:"7px 12px", fontSize:12.5, fontWeight:700, cursor:"pointer" }}>
+                <span style={{ width:9, height:9, borderRadius:3, background:BRAND_DOT[b]||C.sub }} />{b}{brand===b?" ✓":""}
+              </button>
+            ))}
+            {brands.length===0 && <span style={{ fontSize:12, color:C.sub }}>Add brands in Lists first.</span>}
+          </div>
+          <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, marginBottom:6 }}>2 · Upload the file</div>
+          <label style={{ display:"block", border:`2px dashed ${brand?C.line:"#E9ECF2"}`, borderRadius:12, padding:"18px", textAlign:"center", cursor:brand?"pointer":"not-allowed", background:brand?"#F8F9FC":"#F3F4F7", opacity:brand?1:0.6 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.navy }}>{busy ? "Reading…" : brand ? `Choose .csv or .xlsx for ${brand}` : "Pick a brand above first"}</div>
+            <div style={{ fontSize:11, color:C.sub, marginTop:4 }}>Description · Duration · Publish time · Permalink · Views · Follows</div>
+            <input type="file" accept=".csv,.xlsx,.xls,text/csv" disabled={!brand} onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; if(f) handle(f); if(e.target) e.target.value=""; }} style={{ display:"none" }} />
+          </label>
           {err && <div style={{ background:"#FBE4E6", color:"#A11", fontSize:12, fontWeight:600, padding:"9px 11px", borderRadius:8, marginTop:12 }}>{err}</div>}
           {result && (
             <div style={{ marginTop:14 }}>
@@ -805,7 +806,7 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
                 ))}
               </div>
               <button disabled={!result.updates.length && !result.creates.length} onClick={()=>{ if(result.updates.length) onApply(result.updates); if(result.creates.length) onCreate(result.creates); onClose(); }} style={{ width:"100%", marginTop:14, border:"none", background:(result.updates.length||result.creates.length)?C.navy:"#E6E9F0", color:(result.updates.length||result.creates.length)?"#fff":"#A9B2C4", borderRadius:9, padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>Import {result.updates.length+result.creates.length} post{(result.updates.length+result.creates.length)===1?"":"s"}</button>
-              <div style={{ fontSize:11, color:C.sub, marginTop:8 }}>New pieces come in as <b>Published</b> with their publish date. Brand is matched from the Account column — set any that show "no brand" on the Content tab.</div>
+              <div style={{ fontSize:11, color:C.sub, marginTop:8 }}>New pieces come in as <b>Published</b> under <b>{result.brand}</b> with their publish date, duration, permalink, views &amp; follows.</div>
             </div>
           )}
         </div>
@@ -1100,7 +1101,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilt
     if (sortKey==="publishedAt") return pubDate(r);
     if (sortKey==="writer") return writerOf(r).toLowerCase();
     if (sortKey==="topic") return topicOf(r).toLowerCase();
-    if (["views","reach","interactions","follows"].includes(sortKey)) return n(r[sortKey]);
+    if (["views","reach","interactions","follows","duration"].includes(sortKey)) return n(r[sortKey]);
     return String(r[sortKey]==null?"":r[sortKey]).toLowerCase();
   };
   list.sort((a,b)=>{ const x=val(a), y=val(b); if(x===y) return 0; if(typeof x==="number") return (x-y)*sortDir; if(x==="") return 1; if(y==="") return -1; return (x<y?-1:1)*sortDir; });
@@ -1136,17 +1137,17 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilt
             <table className="xl" style={{ width:"100%" }}>
               <colgroup>
                 <col style={{ width:86 }} /><col /><col style={{ width:86 }} />
-                <col style={{ width:74 }} /><col style={{ width:78 }} /><col style={{ width:82 }} /><col style={{ width:74 }} />
+                <col style={{ width:74 }} /><col style={{ width:80 }} /><col style={{ width:76 }} /><col style={{ width:78 }} />
                 <col style={{ width:96 }} /><col style={{ width:96 }} /><col style={{ width:74 }} />
               </colgroup>
               <thead><tr style={{ background:BLUE.head }}>
                 <th style={th} onClick={()=>toggleSort("importedAt")}>Imported{arrow("importedAt")}</th>
                 <th style={th} onClick={()=>toggleSort("title")}>Title / Caption{arrow("title")}</th>
                 <th style={th} onClick={()=>toggleSort("publishedAt")}>Published{arrow("publishedAt")}</th>
-                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("reach")}>Reach{arrow("reach")}</th>
+                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("duration")}>Dur. (s){arrow("duration")}</th>
                 <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("views")}>Views{arrow("views")}</th>
-                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("interactions")}>Inter.{arrow("interactions")}</th>
                 <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("follows")}>Follows{arrow("follows")}</th>
+                <th style={{ ...th, textAlign:"center" }}>Permalink</th>
                 <th style={th} onClick={()=>toggleSort("writer")}>Writer{arrow("writer")}</th>
                 <th style={th} onClick={()=>toggleSort("topic")}>Topic{arrow("topic")}</th>
                 <th style={{ ...th, cursor:"default", borderRight:"none", textAlign:"center" }}>Connect</th>
@@ -1157,10 +1158,10 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilt
                     <td style={{ fontSize:11.5, color:C.sub, padding:"7px 7px", whiteSpace:"nowrap" }}>{r.importedAt?isoToDisp(r.importedAt):"—"}</td>
                     <td style={{ fontSize:12, padding:"7px 7px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:0 }} title={r.title}>{r.title||"(untitled)"}</td>
                     <td style={{ fontSize:11.5, color:C.sub, padding:"7px 7px", whiteSpace:"nowrap" }}>{pubDate(r)?isoToDisp(pubDate(r)):"—"}</td>
-                    <td style={numCell}>{fmt(r.reach)}</td>
+                    <td style={numCell}>{r.duration?fmt(r.duration):"—"}</td>
                     <td style={numCell}>{fmt(r.views)}</td>
-                    <td style={numCell}>{fmt(r.interactions)}</td>
                     <td style={{ ...numCell, fontWeight:700, color:"#15724A" }}>{fmt(r.follows)}</td>
+                    <td style={{ padding:"5px 7px", textAlign:"center" }}>{r.contentLink ? <a href={r.contentLink} target="_blank" rel="noopener noreferrer" title={r.contentLink} style={{ color:BLUE.accent, fontWeight:700, fontSize:11.5, textDecoration:"none" }}>Open ↗</a> : <span style={{ color:"#C4CBD8" }}>—</span>}</td>
                     <td style={{ fontSize:12, padding:"7px 7px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c ? (writerOf(r)||"—") : <span style={{ color:"#C4CBD8" }}>—</span>}</td>
                     <td style={{ fontSize:12, padding:"7px 7px" }}>{c ? (topicOf(r) ? <Pill bg="#EEF1F6" fg={C.sub}>{topicOf(r)}</Pill> : "—") : <span style={{ color:"#C4CBD8" }}>—</span>}</td>
                     <td style={{ padding:"5px 7px", borderRight:"none", textAlign:"center" }}>
