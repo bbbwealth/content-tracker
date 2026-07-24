@@ -208,6 +208,11 @@ const Row = ({ k, v }) => (<div style={{ display:"flex", justifyContent:"space-b
 const Empty = ({ children }) => <div style={{ textAlign:"center", color:C.sub, fontSize:13, padding:30 }}>{children}</div>;
 const dow = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-US", { weekday:"short" }); } catch(e) { return ""; } };
 const localISO = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`; };
+const localDateTime = () => { const x = new Date(); const p=(n)=>String(n).padStart(2,"0"); return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())}T${p(x.getHours())}:${p(x.getMinutes())}`; };
+const fmtDateTime = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s||"")); return m ? `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}` : ""; };
+// calendar chips are coloured by the piece's writer
+const WRITER_COLOR = { Hubert:"#1FA463", Serene:"#D9A200", Madeleine:"#B76E79" };
+const WRITER_TINT  = { Hubert:"#E4F4EA", Serene:"#FAF0CE", Madeleine:"#F5E4E7" };
 const nowISO = () => localISO(new Date());
 const TODAY = nowISO();
 const dayspan = (a, b) => { if (!a || !b) return null; return (new Date(b) - new Date(a)) / 86400000; };
@@ -226,7 +231,7 @@ const syncCalendar = (calendar, item, status) => {
 };
 const calStatusForPipe = (it) => (it.status === ST.PUBLISHED || it.status === "Posted") ? "Posted" : (it.status === ST.SCHEDULED ? "Scheduled" : "Planned");
 const syncsToCal = (it) => !!(it.target || it.status === ST.SCHEDULED || it.status === ST.PUBLISHED);
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {};
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {};
   // ── one-time merge: Idea Bank + Pipeline become a single board (data.ideas kept as an untouched archive) ──
   if (!d.settings.mergedV1) {
     const fromPipe = (d.pipeline || []).map((p) => ({ ...p, status: toStage(p.status), by: p.by || p.owner || "", dateAdded: p.dateAdded || "", stamps: p.stamps || {} }));
@@ -394,6 +399,7 @@ function App() {
   const currentUser = session.user || {};
   const role = (currentUser.app_metadata && currentUser.app_metadata.role) || "user";
   const isAdmin = role === "admin";
+  const isEditor = role === "editor"; // editors get a restricted, edit-only view of the content assigned to them
   const myName = (currentUser.user_metadata && currentUser.user_metadata.name) || currentUser.email || "";
   const L = data.lists;
   const matchBrand = (r) => brandFilter === "All" || r.brand === brandFilter;
@@ -456,20 +462,10 @@ function App() {
   // plug a piece into a day from the Calendar (or unplug it) — the Content grid reflects it instantly
   const schedulePieces = (ids, date) => persist({ ...data, pipeline: data.pipeline.map((r)=>(ids.includes(r._id) ? withStamp({ ...r, target:date, status:ST.SCHEDULED }, ST.SCHEDULED) : r)) });
   const unschedulePiece = (id) => persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===id ? { ...r, target:"", status:(r.status===ST.SCHEDULED||r.status===ST.PUBLISHED)?ST.EDITED:r.status } : r)) });
-  // link an imported post to the planned piece it belongs to: metrics move across, the imported stub goes away
-  const linkInsight = (sourceId, targetId) => {
-    const src = data.pipeline.find((r)=>r._id===sourceId);
-    if (!src || sourceId===targetId) return;
-    const rows = data.pipeline.filter((r)=>r._id!==sourceId).map((r)=>{
-      if (r._id !== targetId) return r;
-      const m = {};
-      ["views","reach","likes","comments","shares","saves","follows","importedAt","publishedAt"].forEach((k)=>{ if (src[k]!==undefined && src[k]!=="") m[k]=src[k]; });
-      // credit the followers to the content's creator — its assigned Writer first, then the submitter,
-      // and only fall back to any creator already on the imported post
-      const creditTo = r.scriptWriter || r.owner || r.by || src.owner || src.by || "";
-      return withStamp({ ...r, ...m, owner: creditTo, status:ST.PUBLISHED, target: r.target || src.target, contentLink: r.contentLink || src.contentLink }, ST.PUBLISHED);
-    });
-    persist({ ...data, pipeline:rows });
+  // connect an imported post to a published content piece — keeps the imported row, just stores a reference.
+  // Insight then reads the Writer + Type off the connected piece. Pass targetId=null to disconnect.
+  const connectInsight = (sourceId, targetId) => {
+    persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===sourceId ? { ...r, connectedTo: targetId || "" } : r)) });
   };
   // bulk-create pieces from a Meta export
   const importPieces = (list) => {
@@ -483,6 +479,11 @@ function App() {
     persist({ ...data, pipeline:[...data.pipeline, row] });
   };
   const saveDeck = (brand, deck) => persist({ ...data, collabDecks: { ...(data.collabDecks||{}), [brand]: deck } });
+  const patchCollab = (id, patch) => persist({ ...data, collabs: data.collabs.map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
+  // editor payouts: rate + payee details, and submitted invoices
+  const savePayout = (name, patch) => persist({ ...data, payouts: { ...(data.payouts||{}), [name]: { ...((data.payouts||{})[name]||{}), ...patch } } });
+  const submitInvoice = (name, invoice) => { const cur=(data.payouts||{})[name]||{}; persist({ ...data, payouts:{ ...(data.payouts||{}), [name]:{ ...cur, invoices:[...(cur.invoices||[]), invoice] } } }); };
+  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, ctype:"", brand:(L.brands[0]||""), talent:"", fee:"", deliverables:"", status:"Pitching", briefDate:"", contentDue:"", goLive:"", contract:"Not started", invoice:"Not started", pic:"", notes:"" }] }); };
   // account-level follower count per brand, keyed in by hand + stamped with the day it was read
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
   const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
@@ -523,12 +524,14 @@ function App() {
   const updateMember = ({ id, role, tabs, contentRoles, employment }) => callAdminFn({ action:"update", id, role, tabs, contentRoles, employment });
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const NAV = [
-    { id:"pipeline", label:"Content", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays }, { id:"insight", label:"Insight", icon:TrendingUp },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"decks", label:"Collab Decks", icon:FolderIcon }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"incentive", label:"Incentive", icon:Trophy }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"pipeline", label:"Content", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays }, { id:"insight", label:"Insight", icon:TrendingUp }, { id:"analytics", label:"Analytics", icon:TrendingUp },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"incentive", label:"Incentive", icon:Trophy }, { id:"payout", label:"Payout", icon:Trophy }, { id:"settings", label:"Lists", icon:Settings },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
-  const visibleNav = (!isAdmin && Array.isArray(allowedTabs)) ? NAV.filter((n)=>n.id==="pipeline" || allowedTabs.includes(n.id)) : NAV;
+  // editors get a locked-down nav: only their Content (edit queue) and Payout
+  const visibleNav = isEditor ? NAV.filter((n)=>n.id==="pipeline" || n.id==="payout")
+    : (!isAdmin && Array.isArray(allowedTabs)) ? NAV.filter((n)=>n.id==="pipeline" || allowedTabs.includes(n.id)) : NAV;
 
   const pageTitle = (NAV.find((n)=>n.id===tab) || {}).label || "Dashboard";
 
@@ -568,14 +571,17 @@ function App() {
         </header>
 
         <div style={{ padding:24, flex:1 }}>
-          {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onLink={linkInsight} followers={data.followers} onSaveFollowers={saveFollowers} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="pipeline" && <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />}
+          {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onConnect={connectInsight} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
+          {tab==="pipeline" && (isEditor
+            ? <EditorContent rows={data.pipeline.filter((r)=>!r.imported && r.editor===myName)} myName={myName} onSetStatus={(id,s)=>setPipelineStatus(id,s)} />
+            : <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />)}
           {tab==="calendar" && <Calendar rows={filt(data.pipeline).filter((r)=>!r.imported)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} onAdd={()=>openAdd("collabs")} onEdit={(r)=>openEdit("collabs",r)} onDel={(id)=>del("collabs",id)} />}
-          {tab==="decks" && <CollabDecks decks={data.collabDecks} brands={L.brands} isAdmin={isAdmin} onSaveDeck={saveDeck} />}
+          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
-          {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} />}
+          {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} />}
+          {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
+          {tab==="payout" && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
           {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
         </div>
@@ -651,6 +657,7 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         account: find("accounts","account","page"),
         views: (()=>{ const v=exact("views"); return v>=0?v:find("videoviews","plays","impressions"); })(),
         reach: exact("reach"),
+        interactions: find("interactions","engagement"),
         likes: find("likesreactions","likes","reactions"),
         comments: find("comments"),
         shares: find("shares"),
@@ -672,13 +679,14 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
       const updates = [], creates = [];
       let skipped = 0;                 // rows with no usable title (blank / TOTAL) — the only rows we drop
       const usedIds = new Set();       // an existing piece can only be matched by ONE import row, never collapsed
-      const stamp = nowISO(); // when this data was imported
+      const stamp = nowISO(); // when this data was imported (date)
+      const stampFull = localDateTime(); // date + time of this import run
       rows.slice(hi+1).forEach((r)=>{
         const title = col.title>=0 ? String(r[col.title]||"").trim() : "";
         if (!title || /^total\b/i.test(title)) { if (r.some((c)=>String(c||"").trim()!=="")) skipped++; return; } // skip Meta's "Total, all posts" / blank rows
         const link = col.link>=0 ? String(r[col.link]||"").trim() : "";
         const metrics = {};
-        ["views","reach","likes","comments","shares","saves","follows"].forEach((k)=>{ if (col[k]>=0 && String(r[col[k]]||"").trim()!=="") metrics[k] = num(r[col[k]]); });
+        ["views","reach","interactions","likes","comments","shares","saves","follows"].forEach((k)=>{ if (col[k]>=0 && String(r[col[k]]||"").trim()!=="") metrics[k] = num(r[col[k]]); });
         // a titled row is ALWAYS imported now — even if Meta left every metric blank (it comes in as 0s, editable)
         const pubDate = col.date>=0 ? parseMetaDate(r[col.date]) : ""; // the actual publish date from Meta
         // match ONLY on an exact link or exact title — captions are long & unique, so they become their own row.
@@ -686,11 +694,11 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
         let p = null;
         if (link) p = pieces.find((x)=>!usedIds.has(x._id) && x.contentLink && norm(x.contentLink)===norm(link));
         if (!p) { const d = norm(title); p = pieces.find((x)=>!usedIds.has(x._id) && x.title && norm(x.title)===d); }
-        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, publishedAt:pubDate } }); }
+        if (p) { usedIds.add(p._id); updates.push({ id:p._id, title:p.title, patch:{ ...metrics, importedAt:stamp, importedAtTime:stampFull, publishedAt:pubDate } }); }
         else {
           const ty = col.type>=0 ? String(r[col.type]||"").trim() : "";
           creates.push({
-            title, ...metrics, importedAt:stamp, imported:1, publishedAt:pubDate,
+            title, ...metrics, importedAt:stamp, importedAtTime:stampFull, imported:1, publishedAt:pubDate,
             brand: col.account>=0 ? brandFor(r[col.account]) : "",
             type: (L.types||[]).includes(ty) ? ty : "",
             target: pubDate,
@@ -757,7 +765,7 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
 }
 
 /* ── insight — performance of published content (numbers typed in per piece) ── */
-function Insight({ rows, allRows, lists, onPatch, onCreate, onLink, followers, onSaveFollowers, brandFilter, setBrandFilter, query, setQuery }) {
+function InsightOld({ rows, allRows, lists, onPatch, onCreate, onLink, followers, onSaveFollowers, brandFilter, setBrandFilter, query, setQuery }) {
   const L = lists || {};
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
   const FOL = followers || {};
@@ -1007,6 +1015,464 @@ function LinkModal({ source, candidates, onLink, onClose }) {
   );
 }
 
+function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilter, setBrandFilter, query, setQuery }) {
+  const L = lists || {};
+  const [importing, setImporting] = useState(false);
+  const [connectRow, setConnectRow] = useState(null);
+  const [sortKey, setSortKey] = useState("publishedAt");
+  const [sortDir, setSortDir] = useState(-1);
+  const [fConn, setFConn] = useState("");     // connected status: "", "yes", "no"
+  const [fWriter, setFWriter] = useState("");
+  const [fTopic, setFTopic] = useState("");
+  const toggleSort = (k)=>{ if (sortKey===k) setSortDir(sortDir*-1); else { setSortKey(k); setSortDir(k==="title"?1:-1); } };
+  const n = (v)=>Number(v)||0;
+  const fmt = (v)=>Number(v||0).toLocaleString();
+  const team = (L.team||[]).filter((t)=>t!=="Unassigned");
+  // Insight only holds imported performance data (imported directly, or matched onto a piece)
+  const pub = (rows||[]).filter((r)=>r.importedAt);
+  const byId = {}; (allRows||[]).forEach((p)=>{ byId[p._id]=p; });
+  const connectedPiece = (r)=> r.connectedTo ? byId[r.connectedTo] : null;
+  const writerOf = (r)=>{ const c=connectedPiece(r); return c ? (c.scriptWriter||c.owner||c.by||"") : ""; };
+  const topicOf = (r)=>{ const c=connectedPiece(r); return c ? (c.category||"") : ""; };
+  const pubDate = (r)=> r.publishedAt || r.target || "";
+  // content pieces available to connect to: team-planned pieces marked Published (not imports)
+  const connectable = (allRows||[]).filter((r)=>r.status===ST.PUBLISHED && !r.importedAt && !r.imported);
+  const lastImport = pub.map((r)=>r.importedAtTime).filter(Boolean).sort().pop() || "";
+  const anyFilter = !!(fConn || fWriter || fTopic);
+  const clearFilters = ()=>{ setFConn(""); setFWriter(""); setFTopic(""); };
+
+  let list = pub.slice();
+  if (fConn==="yes") list = list.filter((r)=>connectedPiece(r));
+  else if (fConn==="no") list = list.filter((r)=>!connectedPiece(r));
+  if (fWriter) list = list.filter((r)=>writerOf(r)===fWriter);
+  if (fTopic) list = list.filter((r)=>topicOf(r)===fTopic);
+  const val = (r)=>{
+    if (sortKey==="publishedAt") return pubDate(r);
+    if (sortKey==="writer") return writerOf(r).toLowerCase();
+    if (sortKey==="topic") return topicOf(r).toLowerCase();
+    if (["views","reach","interactions","follows"].includes(sortKey)) return n(r[sortKey]);
+    return String(r[sortKey]==null?"":r[sortKey]).toLowerCase();
+  };
+  list.sort((a,b)=>{ const x=val(a), y=val(b); if(x===y) return 0; if(typeof x==="number") return (x-y)*sortDir; if(x==="") return 1; if(y==="") return -1; return (x<y?-1:1)*sortDir; });
+
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"9px 7px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px", cursor:"pointer", userSelect:"none" };
+  const arrow = (k)=><span style={{ opacity:sortKey===k?1:.35, marginLeft:3 }}>{sortKey===k ? (sortDir===1?"▲":"▼") : "↕"}</span>;
+  const numCell = { fontSize:12, color:C.ink, padding:"7px 7px", textAlign:"right", whiteSpace:"nowrap" };
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:9, marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={()=>setImporting(true)} style={{ border:"none", background:C.navy, color:"#fff", padding:"8px 14px", borderRadius:9, fontWeight:700, fontSize:12.5, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>⬆ Import from Meta</button>
+        <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
+          <Search size={14} color={C.sub} style={{ position:"absolute", left:9 }} />
+          <input value={query||""} onChange={(e)=>setQuery && setQuery(e.target.value)} placeholder="Search…" style={{ background:"#fff", border:`1px solid ${C.line}`, color:C.ink, borderRadius:8, padding:"7px 10px 7px 29px", fontSize:12.5, width:180, outline:"none", fontFamily:"inherit" }} />
+        </div>
+        {(()=>{ const sel={ border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 10px", fontSize:12.5, background:"#fff", color:C.ink, minWidth:112 }; return (<>
+          <HoverSelect value={brandFilter||"All"} options={L.brands||[]} allLabel="All brands" allValue="All" onChange={(v)=>setBrandFilter && setBrandFilter(v)} style={sel} />
+          <HoverSelect value={fConn} options={[{v:"yes",l:"Connected"},{v:"no",l:"Not connected"}]} allLabel="Any connection" allValue="" onChange={setFConn} style={sel} />
+          <HoverSelect value={fWriter} options={team} allLabel="All writers" allValue="" onChange={setFWriter} style={sel} />
+          <HoverSelect value={fTopic} options={L.topics||[]} allLabel="All topics" allValue="" onChange={setFTopic} style={sel} />
+          {anyFilter && <button onClick={clearFilters} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
+        </>); })()}
+        <div style={{ flex:1 }} />
+        {lastImport && <span style={{ fontSize:11, color:C.sub }}>Last imported <b style={{ color:C.ink }}>{fmtDateTime(lastImport)}</b></span>}
+        <span style={{ fontSize:11.5, color:C.sub, fontWeight:600 }}>{list.length} post{list.length===1?"":"s"}</span>
+      </div>
+      {importing && <ImportModal pieces={rows||[]} lists={L} onApply={(l)=>l.forEach((m)=>onPatch(m.id, m.patch))} onCreate={onCreate} onClose={()=>setImporting(false)} />}
+      {connectRow && <ConnectModal source={connectRow} candidates={connectable} connectedId={connectRow.connectedTo||""} onConnect={(tid)=>{ onConnect(connectRow._id, tid); setConnectRow(null); }} onClose={()=>setConnectRow(null)} />}
+      {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
+        <div style={{ ...card(0), overflow:"visible" }}>
+          <div style={{ overflow:"visible" }}>
+            <table className="xl" style={{ width:"100%" }}>
+              <colgroup>
+                <col style={{ width:86 }} /><col /><col style={{ width:86 }} />
+                <col style={{ width:74 }} /><col style={{ width:78 }} /><col style={{ width:82 }} /><col style={{ width:74 }} />
+                <col style={{ width:96 }} /><col style={{ width:96 }} /><col style={{ width:74 }} />
+              </colgroup>
+              <thead><tr style={{ background:BLUE.head }}>
+                <th style={th} onClick={()=>toggleSort("importedAt")}>Imported{arrow("importedAt")}</th>
+                <th style={th} onClick={()=>toggleSort("title")}>Title / Caption{arrow("title")}</th>
+                <th style={th} onClick={()=>toggleSort("publishedAt")}>Published{arrow("publishedAt")}</th>
+                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("reach")}>Reach{arrow("reach")}</th>
+                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("views")}>Views{arrow("views")}</th>
+                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("interactions")}>Inter.{arrow("interactions")}</th>
+                <th style={{ ...th, textAlign:"right" }} onClick={()=>toggleSort("follows")}>Follows{arrow("follows")}</th>
+                <th style={th} onClick={()=>toggleSort("writer")}>Writer{arrow("writer")}</th>
+                <th style={th} onClick={()=>toggleSort("topic")}>Topic{arrow("topic")}</th>
+                <th style={{ ...th, cursor:"default", borderRight:"none", textAlign:"center" }}>Connect</th>
+              </tr></thead>
+              <tbody>
+                {list.map((r)=>{ const c=connectedPiece(r); return (
+                  <tr key={r._id}>
+                    <td style={{ fontSize:11.5, color:C.sub, padding:"7px 7px", whiteSpace:"nowrap" }}>{r.importedAt?isoToDisp(r.importedAt):"—"}</td>
+                    <td style={{ fontSize:12, padding:"7px 7px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", maxWidth:0 }} title={r.title}>{r.title||"(untitled)"}</td>
+                    <td style={{ fontSize:11.5, color:C.sub, padding:"7px 7px", whiteSpace:"nowrap" }}>{pubDate(r)?isoToDisp(pubDate(r)):"—"}</td>
+                    <td style={numCell}>{fmt(r.reach)}</td>
+                    <td style={numCell}>{fmt(r.views)}</td>
+                    <td style={numCell}>{fmt(r.interactions)}</td>
+                    <td style={{ ...numCell, fontWeight:700, color:"#15724A" }}>{fmt(r.follows)}</td>
+                    <td style={{ fontSize:12, padding:"7px 7px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c ? (writerOf(r)||"—") : <span style={{ color:"#C4CBD8" }}>—</span>}</td>
+                    <td style={{ fontSize:12, padding:"7px 7px" }}>{c ? (topicOf(r) ? <Pill bg="#EEF1F6" fg={C.sub}>{topicOf(r)}</Pill> : "—") : <span style={{ color:"#C4CBD8" }}>—</span>}</td>
+                    <td style={{ padding:"5px 7px", borderRight:"none", textAlign:"center" }}>
+                      {c ? (
+                        <button onClick={()=>setConnectRow(r)} title={"Connected to: "+(c.title||"")+"  ·  click to change or disconnect"} style={{ display:"inline-grid", placeItems:"center", width:26, height:26, border:`1px solid #8FD3AC`, background:"#DCF0E4", color:"#15724A", borderRadius:7, cursor:"pointer" }}>
+                          <Share2 size={13} />
+                        </button>
+                      ) : (
+                        <button onClick={()=>setConnectRow(r)} title="Connect to a published content piece" style={{ display:"inline-grid", placeItems:"center", width:26, height:26, border:`1px solid ${BLUE.accent}`, background:"#fff", color:BLUE.accent, borderRadius:7, cursor:"pointer" }}>
+                          <Plus size={14} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {pub.length>0 && <div style={{ fontSize:11, color:C.sub, marginTop:9 }}>Each row is an imported Meta post. Hit <Plus size={11} style={{ verticalAlign:"middle" }} /> to <b>connect</b> it to a piece you've marked <b>Published</b> on Content — that pulls in the piece's <b>Writer</b> and <b>Topic</b>, and the row shows a <Share2 size={11} style={{ verticalAlign:"middle" }} /> badge.</div>}
+    </div>
+  );
+}
+
+/* ── connect an imported post to a Published content piece (reference only — nothing is merged or deleted) ── */
+function ConnectModal({ source, candidates, connectedId, onConnect, onClose }) {
+  const [q, setQ] = useState("");
+  const nrm = (s)=>String(s||"").toLowerCase();
+  const dayGap = (a,b)=>{ if(!a||!b) return 9999; return Math.abs((new Date(a)-new Date(b))/86400000); };
+  const srcPub = source.publishedAt || source.target;
+  const scored = candidates.map((c)=>{
+    let s = 0;
+    if (c.brand && source.brand && c.brand===source.brand) s += 50;
+    const gap = dayGap(c.target||c.dateAdded, srcPub); if (gap < 400) s += Math.max(0, 30 - gap);
+    const t = nrm(c.title).slice(0,14); if (t && nrm(source.title).indexOf(t)>=0) s += 40;
+    return { c, s };
+  }).sort((a,b)=>b.s-a.s).map((x)=>x.c);
+  const shown = q ? scored.filter((c)=>nrm(c.title).indexOf(nrm(q))>=0 || nrm(c.brand).indexOf(nrm(q))>=0) : scored.slice(0,25);
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(17,25,43,.45)", display:"grid", placeItems:"center", zIndex:60, padding:16, backdropFilter:"blur(2px)" }}>
+      <div onClick={(e)=>e.stopPropagation()} style={{ background:"#fff", borderRadius:16, width:"min(600px,100%)", maxHeight:"84vh", display:"flex", flexDirection:"column", boxShadow:"0 24px 60px rgba(20,35,62,.28)" }}>
+        <div style={{ background:C.navy, padding:"14px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ color:"#fff", fontWeight:700, fontSize:14.5 }}>Connect to a published content piece</div>
+          <span style={{ cursor:"pointer" }} onClick={onClose}><X size={17} color="#9FB0CC" /></span>
+        </div>
+        <div style={{ padding:"14px 18px", borderBottom:`1px solid ${C.line}` }}>
+          <div style={{ fontSize:11, color:C.sub, marginBottom:6 }}>Imported post</div>
+          <div style={{ fontSize:12.5, fontWeight:700, lineHeight:1.4, maxHeight:52, overflow:"hidden" }}>{source.title}</div>
+          <div style={{ fontSize:11, color:C.sub, marginTop:5 }}>{[source.brand, srcPub && isoToDisp(srcPub), fmtNum(source.follows)+" follows"].filter(Boolean).join(" · ")}</div>
+          <div style={{ fontSize:11.5, color:C.sub, marginTop:11 }}>Only pieces you've marked <b>Published</b> on Content appear here. Connecting pulls that piece's Writer and Type onto this row — the post itself is not changed.</div>
+          <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Search your published pieces…" style={{ ...inp(), marginTop:10 }} />
+        </div>
+        <div style={{ padding:12, overflowY:"auto", display:"grid", gap:7 }}>
+          {connectedId && <button onClick={()=>onConnect("")} style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:6, border:`1px solid ${C.red}`, background:"#fff", color:C.red, borderRadius:10, padding:"9px 11px", cursor:"pointer", fontSize:12.5, fontWeight:700 }}>Disconnect this post</button>}
+          {shown.length===0 && <Empty>{candidates.length===0 ? "Nothing to connect to yet. Mark a piece Published on Content, then it shows up here." : "No published pieces match that search."}</Empty>}
+          {shown.map((c)=>{ const on=c._id===connectedId; return (
+            <button key={c._id} onClick={()=>onConnect(c._id)} style={{ display:"flex", alignItems:"center", gap:10, border:`1.5px solid ${on?"#8FD3AC":C.line}`, background:on?"#F1FBF5":"#fff", borderRadius:10, padding:"9px 11px", cursor:"pointer", textAlign:"left" }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:12.5, fontWeight:700, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.title||"(untitled)"}</div>
+                <div style={{ fontSize:10.5, color:C.sub, marginTop:2 }}>{[c.brand, c.type, (c.scriptWriter||c.owner||c.by) && ("writer "+(c.scriptWriter||c.owner||c.by)), c.target && isoToDisp(c.target)].filter(Boolean).join(" · ")}</div>
+              </div>
+              <span style={{ fontSize:11.5, fontWeight:700, color:on?"#15724A":BLUE.accent, whiteSpace:"nowrap" }}>{on?"✓ connected":"Connect →"}</span>
+            </button>
+          ); })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Editor role — restricted, read-only view of pieces assigned to them; can open assets and mark a piece Edited.
+function EditorContent({ rows, myName, onSetStatus }) {
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  const assetOf = (r)=> r.assetsLink||r.contentLink||r.scriptLink||r.footageLink||"";
+  const done = (r)=> r.status===ST.EDITED || r.status===ST.SCHEDULED || r.status===ST.PUBLISHED;
+  return (
+    <div>
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:18, fontWeight:800, color:C.ink }}>Your edit queue</div>
+        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{rows.length} piece{rows.length===1?"":"s"} assigned to you as editor. Open the assets, then mark a piece Edited when you're done.</div>
+      </div>
+      <div style={{ ...card(0), overflow:"hidden" }}>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:820 }}>
+            <colgroup><col /><col style={{ width:130 }} /><col style={{ width:120 }} /><col style={{ width:104 }} /><col style={{ width:118 }} /><col style={{ width:110 }} /><col style={{ width:150 }} /></colgroup>
+            <thead><tr style={{ background:BLUE.head }}>
+              {["Idea","Brand","Topic","Writer","Stage","Assets",""].map((h,i)=><th key={i} style={{ ...th, ...(i===6?{ borderRight:"none" }:null) }}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {rows.length===0 && <tr><td colSpan={7} style={{ padding:0 }}><Empty>Nothing is assigned to you to edit yet.</Empty></td></tr>}
+              {rows.map((r,i)=>{ const a=assetOf(r); return (
+                <tr key={r._id} style={{ background:i%2?"#F5F7FB":"#fff" }}>
+                  <td style={{ fontSize:12.5, fontWeight:600, padding:"9px 8px", borderBottom:`1px solid ${C.line}`, maxWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.title||"(untitled)"}</td>
+                  <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}><BrandTag b={r.brand} /></td>
+                  <td style={{ fontSize:12, color:C.sub, padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{r.category||"—"}</td>
+                  <td style={{ fontSize:12, padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{r.scriptWriter||"—"}</td>
+                  <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}><span style={{ background:STAGE_TINT[r.status]||"#EEF1F6", color:STAGE_INK[r.status]||C.sub, fontWeight:700, fontSize:11.5, padding:"3px 9px", borderRadius:6 }}>{r.status}</span></td>
+                  <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{a ? <a href={a} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:5, border:`1px solid ${BLUE.accent}`, color:BLUE.accent, borderRadius:7, padding:"5px 10px", fontSize:11.5, fontWeight:700, textDecoration:"none" }}>Open ↗</a> : <span style={{ color:"#C7CFDD", fontSize:12 }}>— no link —</span>}</td>
+                  <td style={{ padding:"7px 8px", borderBottom:`1px solid ${C.line}`, borderRight:"none" }}>
+                    {done(r) ? <span style={{ display:"inline-flex", alignItems:"center", gap:5, color:"#15724A", fontWeight:700, fontSize:12 }}>✓ Edited</span>
+                      : <button onClick={()=>onSetStatus(r._id, ST.EDITED)} style={{ border:"none", background:"#1FA463", color:"#fff", borderRadius:7, padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>Mark as Edited</button>}
+                  </td>
+                </tr>
+              ); })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Payout — editors record their rate, edited-content count, payee details, and submit invoices. Admins see everyone.
+function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubmitInvoice }) {
+  const P = (rows||[]).filter((r)=>!r.imported);
+  const editedBy = (name)=> P.filter((r)=>r.editor===name && (r.stamps && r.stamps[ST.EDITED]));
+  const POUT = payouts || {};
+  const editorsFromData = [...new Set(P.filter((r)=>r.editor && (r.stamps&&r.stamps[ST.EDITED])).map((r)=>r.editor))];
+  const names = isAdmin ? [...new Set([...editorsFromData, ...Object.keys(POUT)])].filter(Boolean).sort() : [myName];
+  const fmt = (n)=>Number(n||0).toLocaleString();
+  const fld = (label, val, onCommit, ph, readOnly) => (
+    <div style={{ marginBottom:9 }}>
+      <div style={{ fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:3 }}>{label}</div>
+      {readOnly ? <div style={{ fontSize:13, fontWeight:600, minHeight:18 }}>{val||"—"}</div>
+        : <input defaultValue={val||""} placeholder={ph||""} onBlur={(e)=>{ if((e.target.value||"")!==(val||"")) onCommit(e.target.value); }} onKeyDown={(e)=>{ if(e.key==="Enter") e.target.blur(); }} style={{ width:"100%", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />}
+    </div>
+  );
+  const panel = (name)=>{
+    const rec = POUT[name] || {}; const payee = rec.payee || {};
+    const edited = editedBy(name); const rate = Number(rec.rate)||0; const total = edited.length*rate;
+    const invoices = rec.invoices || [];
+    const canEdit = isAdmin || (isEditor && name===myName);
+    const savePayee = (patch)=> onSave(name, { payee:{ ...payee, ...patch } });
+    const submit = ()=>{
+      if (edited.length===0) { alert("No edited content to invoice yet."); return; }
+      if (!rate) { alert("Set your rate per content first."); return; }
+      if (!payee.company || !payee.bank) { alert("Please fill in at least your company name and bank details before submitting."); return; }
+      onSubmitInvoice(name, { id:uid(), date:nowISO(), count:edited.length, rate, amount:total, titles:edited.map((r)=>r.title).slice(0,50) });
+    };
+    return (
+      <div key={name} style={{ ...card(18), marginBottom:16 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+          <span style={{ width:34, height:34, borderRadius:10, background:C.navy, color:"#fff", display:"grid", placeItems:"center", fontWeight:800, fontSize:14 }}>{(name||"?").slice(0,1)}</span>
+          <div style={{ fontSize:16, fontWeight:700 }}>{name}</div>
+          <div style={{ flex:1 }} />
+          <div style={{ textAlign:"right" }}><div style={{ fontSize:22, fontWeight:800, color:C.navy }}>RM {fmt(total)}</div><div style={{ fontSize:11, color:C.sub }}>{edited.length} edited × RM {fmt(rate)}</div></div>
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1.1fr 1fr", gap:18 }}>
+          <div>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:8 }}>Work &amp; rate</div>
+            <div style={{ display:"flex", gap:12, marginBottom:12, flexWrap:"wrap" }}>
+              <div style={{ flex:1, minWidth:110, background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px" }}><div style={{ fontSize:20, fontWeight:800 }}>{edited.length}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600 }}>Content edited</div></div>
+              <div style={{ flex:1, minWidth:110 }}>{fld("Rate per content (RM)", rate||"", (v)=>onSave(name,{ rate:Number(v)||0 }), "0", !canEdit)}</div>
+            </div>
+            <div style={{ maxHeight:150, overflowY:"auto", border:`1px solid ${C.line}`, borderRadius:9 }}>
+              {edited.length===0 ? <div style={{ padding:12, fontSize:12, color:C.sub }}>No content marked Edited yet.</div>
+                : edited.map((r)=>(<div key={r._id} style={{ display:"flex", gap:8, alignItems:"center", padding:"7px 10px", borderBottom:`1px solid ${C.line}`, fontSize:12 }}><span style={{ color:"#15724A", fontWeight:800 }}>✓</span><span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.title||"(untitled)"}</span><span style={{ color:C.sub, fontSize:11 }}>{r.stamps&&r.stamps[ST.EDITED]?isoToDisp(String(r.stamps[ST.EDITED]).slice(0,10)):""}</span></div>))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:8 }}>Payee details</div>
+            {fld("Company name", payee.company, (v)=>savePayee({ company:v }), "Your company / name", !canEdit)}
+            {fld("Registration no.", payee.regNo, (v)=>savePayee({ regNo:v }), "SSM / business reg", !canEdit)}
+            <div style={{ display:"flex", gap:10 }}>
+              <div style={{ flex:1 }}>{fld("Email", payee.email, (v)=>savePayee({ email:v }), "you@email.com", !canEdit)}</div>
+              <div style={{ flex:1 }}>{fld("Contact number", payee.phone, (v)=>savePayee({ phone:v }), "+60…", !canEdit)}</div>
+            </div>
+            {fld("Bank details", payee.bank, (v)=>savePayee({ bank:v }), "Bank · account name · account no.", !canEdit)}
+          </div>
+        </div>
+        {canEdit && <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:14, paddingTop:14, borderTop:`1px solid ${C.line}` }}>
+          <button onClick={submit} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:700, cursor:"pointer" }}>Submit invoice · RM {fmt(total)}</button>
+          <span style={{ fontSize:11.5, color:C.sub }}>Submits the {edited.length} edited piece{edited.length===1?"":"s"} at RM {fmt(rate)} each.</span>
+        </div>}
+        {invoices.length>0 && <div style={{ marginTop:14 }}>
+          <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:6 }}>Submitted invoices</div>
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr>{["Date","Content","Rate","Amount"].map((h,i)=><th key={h} style={{ textAlign:i>=2?"right":"left", fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", padding:"0 8px 6px" }}>{h}</th>)}</tr></thead>
+            <tbody>{[...invoices].reverse().map((iv)=>(<tr key={iv.id} style={{ borderTop:`1px solid ${C.line}` }}><td style={{ padding:"7px 8px", fontSize:12 }}>{isoToDisp(String(iv.date).slice(0,10))}</td><td style={{ padding:"7px 8px", fontSize:12 }}>{iv.count} piece{iv.count===1?"":"s"}</td><td style={{ padding:"7px 8px", fontSize:12, textAlign:"right" }}>RM {fmt(iv.rate)}</td><td style={{ padding:"7px 8px", fontSize:12.5, fontWeight:700, textAlign:"right" }}>RM {fmt(iv.amount)}</td></tr>))}</tbody>
+          </table>
+        </div>}
+      </div>
+    );
+  };
+  return (
+    <div>
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:18, fontWeight:800, color:C.ink }}>Payout</div>
+        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{isAdmin ? "Editor payouts — content edited, rate, and submitted invoices." : "Log your edited content, rate and payee details, then submit an invoice."}</div>
+      </div>
+      {names.length===0 || (!isAdmin && !isEditor)
+        ? <div style={{ ...card(16), fontSize:13, color:C.sub }}>{(!isAdmin && !isEditor) ? "This tab is for editors. If you edit content, ask an admin to set your role to Editor." : "No editor payouts yet."}</div>
+        : names.map((n)=>panel(n))}
+    </div>
+  );
+}
+
+function Analytics({ rows, lists, followers, onSaveFollowers }) {
+  const L = lists || {};
+  const P = rows || [];
+  const FOL = followers || {};
+  const byId = {}; P.forEach((p)=>{ byId[p._id]=p; });
+  const n = (v)=>Number(v)||0;
+  const fmt = (v)=>Number(v||0).toLocaleString();
+  const stages = [ST.IDEA, ST.SCRIPTED, ST.FILMED, ST.EDITED, ST.PUBLISHED];
+  const monthName = (ym)=>{ const m=/^(\d{4})-(\d{2})$/.exec(ym); if(!m) return ym; return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m[2])-1]+" "+m[1]; };
+
+  // ── performance: imported posts, attributed via their connected content piece ──
+  const posts = P.filter((r)=>r.importedAt);
+  const connOf = (r)=> r.connectedTo ? byId[r.connectedTo] : null;
+  const topicOf = (r)=>{ const c=connOf(r); return c ? (c.category||"") : ""; };
+  const writerOf = (r)=>{ const c=connOf(r); return c ? (c.scriptWriter||c.owner||c.by||"") : ""; };
+  const connectedPosts = posts.filter((r)=>connOf(r));
+  const agg = (keyFn)=>{
+    const m={};
+    connectedPosts.forEach((r)=>{ const k=keyFn(r)||"(none)"; m[k]=m[k]||{ k, posts:0, follows:0, views:0 }; m[k].posts++; m[k].follows+=n(r.follows); m[k].views+=n(r.views); });
+    return Object.values(m).map((x)=>({ ...x, avgF:x.posts?Math.round(x.follows/x.posts):0, avgV:x.posts?Math.round(x.views/x.posts):0 })).sort((a,b)=>b.follows-a.follows);
+  };
+  const byTopic = agg(topicOf);
+  const byWriter = agg(writerOf);
+
+  // ── throughput: planned content pieces, by stage stamps ──
+  const content = P.filter((r)=>!r.importedAt && !r.imported);
+  const monthsPresent = (()=>{ const set=new Set(); content.forEach((r)=>Object.values(r.stamps||{}).forEach((v)=>{ const mm=String(v).slice(0,7); if(/^\d{4}-\d{2}$/.test(mm)) set.add(mm); })); return set; })();
+  const curMonth = (()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); })();
+  const [ym, setYm] = useState(curMonth);
+  // the current month is ALWAYS an option (so you can always come back to it), plus every month that appears in stamps
+  const monthOpts = (()=>{ const s=new Set(monthsPresent); s.add(curMonth); s.add(ym); return [...s].sort().reverse(); })();
+  const inMonth = (iso)=> String(iso||"").slice(0,7)===ym;
+  const stageMatrix = (field)=>{
+    const m={};
+    content.forEach((r)=>{ const who=r[field]; if(!who) return; m[who]=m[who]||{ who, month:{}, total:{}, pieces:new Set() }; m[who].pieces.add(r._id);
+      stages.forEach((s)=>{ const t=(r.stamps||{})[s]; if(t){ m[who].total[s]=(m[who].total[s]||0)+1; if(inMonth(t)) m[who].month[s]=(m[who].month[s]||0)+1; } }); });
+    return Object.values(m).sort((a,b)=>b.pieces.size-a.pieces.size);
+  };
+  const writerRows = stageMatrix("scriptWriter");
+  const editorRows = stageMatrix("editor");
+
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"9px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  const numTd = { textAlign:"right", fontSize:12, padding:"7px 8px", whiteSpace:"nowrap", borderBottom:`1px solid ${C.line}` };
+  const perfTable = (label) => (data) => (
+    <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
+        <thead><tr style={{ background:BLUE.head }}>
+          <th style={th}>{label}</th><th style={{ ...th, textAlign:"right" }}>Posts</th>
+          <th style={{ ...th, textAlign:"right" }}>Total follows</th><th style={{ ...th, textAlign:"right" }}>Avg follows</th>
+          <th style={{ ...th, textAlign:"right" }}>Total views</th><th style={{ ...th, textAlign:"right" }}>Avg views</th>
+        </tr></thead>
+        <tbody>
+          {data.length===0 && <tr><td colSpan={6} style={{ padding:0 }}><Empty>Connect imported posts to content pieces (Insight → ＋) so they pick up a {label.toLowerCase()}.</Empty></td></tr>}
+          {data.map((x,i)=>(
+            <tr key={x.k} style={{ background:i%2?"#F5F7FB":"#fff" }}>
+              <td style={{ fontSize:12, fontWeight:600, padding:"7px 8px", borderBottom:`1px solid ${C.line}` }}>{x.k}</td>
+              <td style={numTd}>{x.posts}</td>
+              <td style={{ ...numTd, fontWeight:700, color:"#15724A" }}>{fmt(x.follows)}</td>
+              <td style={numTd}>{fmt(x.avgF)}</td>
+              <td style={{ ...numTd, fontWeight:700 }}>{fmt(x.views)}</td>
+              <td style={numTd}>{fmt(x.avgV)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  const matrixTable = (label) => (dataRows) => (
+    <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", minWidth:640 }}>
+        <thead><tr style={{ background:BLUE.head }}>
+          <th style={th}>{label}</th>
+          {stages.map((s)=><th key={s} style={{ ...th, textAlign:"center" }}>{s}</th>)}
+          <th style={{ ...th, textAlign:"center" }}>Pieces</th>
+        </tr></thead>
+        <tbody>
+          {dataRows.length===0 && <tr><td colSpan={stages.length+2} style={{ padding:0 }}><Empty>No content assigned to a {label.toLowerCase()} yet.</Empty></td></tr>}
+          {dataRows.map((row,i)=>(
+            <tr key={row.who} style={{ background:i%2?"#F5F7FB":"#fff" }}>
+              <td style={{ fontSize:12, fontWeight:600, padding:"7px 8px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap" }}>{row.who}</td>
+              {stages.map((s)=>(
+                <td key={s} style={{ textAlign:"center", padding:"6px 8px", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}` }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:(row.month[s]||0)>0?C.ink:"#C7CFDD" }}>{row.month[s]||0}</span>
+                  <span style={{ fontSize:10.5, color:C.sub }}> / {row.total[s]||0}</span>
+                </td>
+              ))}
+              <td style={{ textAlign:"center", padding:"6px 8px", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}`, fontSize:13, fontWeight:800, color:BLUE.ink }}>{row.pieces.size}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const totF = connectedPosts.reduce((s,r)=>s+n(r.follows),0);
+  const totV = connectedPosts.reduce((s,r)=>s+n(r.views),0);
+  const kpi = (v,l,c)=>(<div style={{ ...card(14), flex:1, minWidth:150 }}><div style={{ fontFamily:"inherit", fontSize:28, fontWeight:600, lineHeight:1, color:c||C.ink }}>{v}</div><div style={{ fontSize:11.5, color:C.sub, fontWeight:600, marginTop:7 }}>{l}</div></div>);
+
+  return (
+    <div style={{ display:"grid", gap:16 }}>
+      <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+        {kpi(fmt(connectedPosts.length)+" / "+fmt(posts.length), "Connected posts", BLUE.accent)}
+        {kpi(fmt(totF), "Follows (connected)", "#15724A")}
+        {kpi(fmt(totV), "Views (connected)", C.navy)}
+      </div>
+      {posts.length>0 && connectedPosts.length===0 && <div style={{ ...card(12), background:"#FFF3CC", border:`1px solid ${C.yellow}`, fontSize:12.5, fontWeight:600, color:"#7a5b00" }}>None of your imported posts are connected to a content piece yet, so topic/writer performance is empty. On <b>Insight</b>, hit ＋ on a post to connect it — that gives it a topic and writer.</div>}
+
+      <div style={card(16)}>
+        <div style={{ display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+          <SectionTitle icon={AtSign}>Current followers by brand</SectionTitle>
+          <span style={{ fontSize:11, color:C.sub }}>Read each account's follower count and key it in — the date stamps when you update it.</span>
+        </div>
+        <table style={{ width:"100%", borderCollapse:"collapse", marginTop:12 }}>
+          <thead><tr>
+            <th style={{ textAlign:"left", fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", padding:"0 8px 7px" }}>Brand</th>
+            <th style={{ textAlign:"right", fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", padding:"0 8px 7px", width:180 }}>Current followers</th>
+            <th style={{ textAlign:"left", fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", padding:"0 8px 7px", width:150 }}>As of</th>
+          </tr></thead>
+          <tbody>
+            {(L.brands||[]).map((b)=>{ const rec=FOL[b]||{}; return (
+              <tr key={b} style={{ borderTop:`1px solid ${C.line}` }}>
+                <td style={{ padding:"9px 8px" }}><BrandTag b={b} /></td>
+                <td style={{ padding:"5px 8px", textAlign:"right" }}>
+                  <InlineText type="number" value={rec.total==null?"":rec.total} onCommit={(v)=>onSaveFollowers && onSaveFollowers(b,{ total:Number(v)||0, asOf:nowISO() })} placeholder="—" style={{ textAlign:"right", fontWeight:700, fontSize:14, border:`1px solid ${C.line}`, borderRadius:7, background:"#fff", padding:"6px 8px" }} />
+                </td>
+                <td style={{ padding:"5px 8px" }}>
+                  <DateCell value={rec.asOf||""} onCommit={(v)=>onSaveFollowers && onSaveFollowers(b,{ asOf:v })} style={{ fontSize:12, color:C.sub, border:`1px solid ${C.line}`, borderRadius:7, background:"#fff", padding:"6px 8px" }} />
+                </td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={card(16)}>
+        <SectionTitle icon={TrendingUp}>Performance by topic</SectionTitle>
+        <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Follows &amp; views of connected posts, grouped by the connected piece's topic.</div>
+        {perfTable("Topic")(byTopic)}
+      </div>
+      <div style={card(16)}>
+        <SectionTitle icon={TrendingUp}>Performance by writer</SectionTitle>
+        <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Same, grouped by the connected piece's writer.</div>
+        {perfTable("Writer")(byWriter)}
+      </div>
+
+      <div style={{ ...card(16) }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:6 }}>
+          <SectionTitle icon={CalendarDays}>Content produced — by stage</SectionTitle>
+          <div style={{ flex:1 }} />
+          <span style={{ fontSize:11.5, color:C.sub }}>Month</span>
+          <select value={ym} onChange={(e)=>setYm(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:8, padding:"6px 10px", fontSize:12.5, background:"#fff", color:C.ink, minWidth:120, fontFamily:"inherit", cursor:"pointer" }}>
+            {monthOpts.map((m)=><option key={m} value={m}>{monthName(m)}{m===curMonth?" (this month)":""}</option>)}
+          </select>
+        </div>
+        <div style={{ fontSize:11, color:C.sub, marginBottom:12 }}>Each cell: <b>{monthName(ym)}</b> count <span style={{ color:C.sub }}>/ all-time total</span>. Counts how many pieces reached each stage.</div>
+        <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, margin:"4px 0 6px", textTransform:"uppercase", letterSpacing:".3px" }}>By writer</div>
+        {matrixTable("Writer")(writerRows)}
+        <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, margin:"16px 0 6px", textTransform:"uppercase", letterSpacing:".3px" }}>By editor</div>
+        {matrixTable("Editor")(editorRows)}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ data, setTab, myName }) {
   const p = data.pipeline;
   const inProd = p.filter((r)=>[ST.SCRIPTED,ST.FILMED,ST.EDITED].includes(r.status)).length;
@@ -1073,11 +1539,53 @@ const dispToIso = (s) => {
   if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31) return null;
   return `${y}-${mo}-${d}`;
 };
+// Type a date OR pick from a small calendar that opens when you focus/click the cell.
+// The calendar is our own popover (not the native picker), so it always closes cleanly when you pick a day.
 function DateCell({ value, onCommit, style, ...rest }) {
   const [v, setV] = useState(isoToDisp(value));
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
   useEffect(()=>{ setV(isoToDisp(value)); }, [value]);
   const commit = ()=>{ const iso = dispToIso(v); if (iso === null) { setV(isoToDisp(value)); return; } if (iso !== (value||"")) onCommit(iso); };
-  return <input {...rest} value={v} placeholder="dd/mm/yyyy" onChange={(e)=>setV(e.target.value)} onBlur={commit} onKeyDown={(e)=>{ if(e.key==="Enter") e.target.blur(); }} style={style} />;
+  const selISO = /^\d{4}-\d{2}-\d{2}$/.test(String(value||"")) ? value : "";
+  const [vm, setVm] = useState(()=>{ const d=new Date(); return { y:d.getFullYear(), m:d.getMonth() }; });
+  useEffect(()=>{ if(open){ const base = selISO ? new Date(selISO+"T00:00:00") : new Date(); setVm({ y:base.getFullYear(), m:base.getMonth() }); } }, [open]);
+  useEffect(()=>{ if(!open) return; const h=(e)=>{ if(wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); }; document.addEventListener("mousedown", h); return ()=>document.removeEventListener("mousedown", h); }, [open]);
+  const pad2 = (n)=>String(n).padStart(2,"0");
+  const pick = (iso)=>{ onCommit(iso); setV(isoToDisp(iso)); setOpen(false); };
+  const first = new Date(vm.y, vm.m, 1); const startPad = (first.getDay()+6)%7; const dim = new Date(vm.y, vm.m+1, 0).getDate();
+  const gridCells = []; for(let i=0;i<startPad;i++) gridCells.push(null); for(let d=1;d<=dim;d++) gridCells.push(d);
+  const todayISO = localISO(new Date());
+  const monthLbl = first.toLocaleDateString("en-US",{ month:"short", year:"numeric" });
+  const shift = (delta)=>setVm(({y,m})=>{ const dd=new Date(y,m+delta,1); return { y:dd.getFullYear(), m:dd.getMonth() }; });
+  const navBtn = { border:"none", background:"transparent", cursor:"pointer", color:C.navy, fontSize:15, fontWeight:800, lineHeight:1, padding:"2px 6px" };
+  return (
+    <div ref={wrapRef} style={{ display:"flex", minWidth:0, flex:1, position:"relative" }}>
+      <input {...rest} value={v} placeholder="dd/mm/yyyy" onClick={()=>setOpen(true)} onChange={(e)=>setV(e.target.value)}
+        onBlur={(e)=>{ commit(); if(!wrapRef.current || !wrapRef.current.contains(e.relatedTarget)) setOpen(false); }}
+        onKeyDown={(e)=>{ if(e.key==="Enter"){ setOpen(false); e.target.blur(); } else if(e.key==="Escape"){ setOpen(false); } }}
+        style={{ ...style, flex:1, minWidth:0 }} />
+      {open && (
+        <div onMouseDown={(e)=>e.preventDefault()} style={{ position:"absolute", top:"100%", left:0, zIndex:50, background:"#fff", border:`1px solid ${C.line}`, borderRadius:9, boxShadow:"0 12px 28px rgba(20,35,62,.22)", padding:8, width:212 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+            <button type="button" onClick={()=>shift(-1)} style={navBtn}>‹</button>
+            <span style={{ fontSize:12, fontWeight:700 }}>{monthLbl}</span>
+            <button type="button" onClick={()=>shift(1)} style={navBtn}>›</button>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:2 }}>
+            {["Mo","Tu","We","Th","Fr","Sa","Su"].map((d)=><div key={d} style={{ fontSize:9.5, fontWeight:700, color:C.sub, textAlign:"center", padding:"2px 0" }}>{d}</div>)}
+            {gridCells.map((d,i)=> d==null ? <div key={"e"+i} /> : (()=>{ const iso=`${vm.y}-${pad2(vm.m+1)}-${pad2(d)}`; const isSel=iso===selISO; const isToday=iso===todayISO; return (
+              <button key={i} type="button" onClick={()=>pick(iso)} style={{ border:"none", cursor:"pointer", borderRadius:5, padding:"4px 0", fontSize:11, fontWeight:isSel?800:500, background:isSel?BLUE.accent:isToday?BLUE.soft:"transparent", color:isSel?"#fff":C.ink }}>{d}</button>
+            ); })())}
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:6, borderTop:`1px solid ${C.line}`, paddingTop:6 }}>
+            <button type="button" onClick={()=>pick(todayISO)} style={{ ...navBtn, fontSize:11, fontWeight:700, color:BLUE.accent }}>Today</button>
+            {selISO && <button type="button" onClick={()=>pick("")} style={{ ...navBtn, fontSize:11, fontWeight:700, color:C.sub }}>Clear</button>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ── dropdown that opens on hover (no click needed), still keyboard-driveable ── */
@@ -1172,6 +1680,19 @@ function ShareModal({ r, phones, team, onClose }) {
   );
 }
 
+// Project Assets — a single link cell (e.g. the Drive/Notion folder holding script, footage & final content).
+// Falls back to any legacy Script/Footage/Content link so nothing is lost; edits save to assetsLink.
+function LinksCell({ r, onPatch }) {
+  const cur = r.assetsLink || r.contentLink || r.scriptLink || r.footageLink || "";
+  const has = !!String(cur).trim();
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:2, padding:"0 4px" }}>
+      <InlineText value={cur} onCommit={(v)=>onPatch(r._id,{assetsLink:v})} placeholder="paste link…" style={{ fontSize:11.5 }} />
+      {has && <a href={cur} target="_blank" rel="noopener noreferrer" tabIndex={-1} title="Open assets" style={{ color:BLUE.accent, fontWeight:800, fontSize:13, textDecoration:"none", paddingRight:2, flexShrink:0 }}>↗</a>}
+    </div>
+  );
+}
+
 function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onEdit, onDel, onDuplicate, onPatch, onQuickAdd, topicLinks, memberPhones, brandFilter, setBrandFilter, setStatus, onPaste, onUndo, canUndo }) {
   const L = lists || {};
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
@@ -1208,10 +1729,8 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
     { field:"category",     kind:"list", label:"Topic",   opts:()=>L.topics||[] },
     { field:"status",       kind:"list", label:"Stage",   opts:()=>stages },
     { field:"scriptWriter", kind:"list", label:"Writer",  opts:()=>team },
+    { field:"editor",       kind:"list", label:"Editor",  opts:()=>team },
     { field:"target",       kind:"date", label:"Schedule" },
-    { field:"scriptLink",   kind:"text", label:"Script" },
-    { field:"footageLink",  kind:"text", label:"Footage" },
-    { field:"contentLink",  kind:"text", label:"Content" },
   ];
   const NCOL = GRID_COLS.length;
   const readCell = (r, ci) => { const c=GRID_COLS[ci]; if(!c||!r) return ""; const v=r[c.field]; return c.kind==="date" ? (v?isoToDisp(v):"") : String(v==null?"":v); };
@@ -1347,6 +1866,7 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
   const [fStage, setFStage] = useState("");
   const [fScript, setFScript] = useState("");
   const [fWriter, setFWriter] = useState("");
+  const [fEditor, setFEditor] = useState("");
   const hasScript = (r)=>!!(r.scriptLink && String(r.scriptLink).trim());
 
   let list = (rows||[]).slice();
@@ -1355,12 +1875,13 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
   if (fScript==="needs") list = list.filter((r)=>!hasScript(r));
   else if (fScript==="has") list = list.filter((r)=>hasScript(r));
   if (fWriter) list = list.filter((r)=>r.scriptWriter===fWriter);
+  if (fEditor) list = list.filter((r)=>r.editor===fEditor);
   if (sortKey) {
     const val = (r)=> sortKey==="status" ? String(STAGES.indexOf(r.status)).padStart(2,"0") : String(r[sortKey]==null?"":r[sortKey]).toLowerCase();
     list.sort((a,b)=>{ const x=val(a), y=val(b); if(x===y) return 0; if(x==="") return 1; if(y==="") return -1; return (x<y?-1:1)*sortDir; });
   }
-  const anyFilter = !!(fType||fStage||fScript||fWriter||(brandFilter&&brandFilter!=="All")||sortKey);
-  const clearAll = ()=>{ setFType(""); setFStage(""); setFScript(""); setFWriter(""); setSortKey(""); if(setBrandFilter) setBrandFilter("All"); };
+  const anyFilter = !!(fType||fStage||fScript||fWriter||fEditor||(brandFilter&&brandFilter!=="All")||sortKey);
+  const clearAll = ()=>{ setFType(""); setFStage(""); setFScript(""); setFWriter(""); setFEditor(""); setSortKey(""); if(setBrandFilter) setBrandFilter("All"); };
 
   const selSty = { border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 10px", fontSize:12.5, fontFamily:"inherit", background:"#fff", cursor:"pointer", color:C.ink, minWidth:118 };
   const th = { textAlign:"left", fontSize:11, fontWeight:700, color:"#fff", padding:"11px 12px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".3px" };
@@ -1371,7 +1892,8 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
         <HoverSelect value={fType} options={L.types||[]} allLabel="All types" allValue="" onChange={setFType} style={selSty} />
         <HoverSelect value={fStage} options={stages} allLabel="All stages" allValue="" onChange={setFStage} style={selSty} />
         <HoverSelect value={fScript} options={[{v:"needs",l:"Needs script"},{v:"has",l:"Has script"}]} allLabel="Script: all" allValue="" onChange={setFScript} style={selSty} />
-        <HoverSelect value={fWriter} options={team} allLabel="All script writers" allValue="" onChange={setFWriter} style={selSty} />
+        <HoverSelect value={fWriter} options={team} allLabel="All writers" allValue="" onChange={setFWriter} style={selSty} />
+        <HoverSelect value={fEditor} options={team} allLabel="All editors" allValue="" onChange={setFEditor} style={selSty} />
         {anyFilter && <button onClick={clearAll} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
         <span style={{ marginLeft:"auto", fontSize:11.5, color:C.sub, fontWeight:600 }}>{list.length} of {(rows||[]).length} pieces</span>
         <button onClick={onAdd} style={{ border:"none", background:C.navy, color:"#fff", padding:"8px 14px", borderRadius:9, fontWeight:700, fontSize:12.5, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}><Plus size={15} />New piece</button>
@@ -1382,23 +1904,23 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
             <table className="xl" style={{ width:"100%" }}>
               <colgroup>
                 <col style={{ width:170 }} /><col style={{ width:126 }} /><col style={{ width:88 }} /><col />
-                <col style={{ width:108 }} /><col style={{ width:104 }} /><col style={{ width:96 }} /><col style={{ width:128 }} />
-                <col style={{ width:62 }} /><col style={{ width:62 }} /><col style={{ width:62 }} />
+                <col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:94 }} /><col style={{ width:94 }} />
+                <col style={{ width:132 }} /><col style={{ width:150 }} />
               </colgroup>
               <thead><tr style={{ background:BLUE.head }}>
-                {[["dateAdded","Date added"],["brand","Brand"],["type","Type"],["title","Idea"],["category","Topic"],["status","Stage"],["scriptWriter","Writer"],["target","Schedule"],["scriptLink","Script"],["footageLink","Footage"],["contentLink","Content"]].map((col)=>(
+                {[["dateAdded","Date added"],["brand","Brand"],["type","Type"],["title","Idea"],["category","Topic"],["status","Stage"],["scriptWriter","Writer"],["editor","Editor"],["target","Schedule"]].map((col)=>(
                   <th key={col[0]} style={{ ...th, cursor:"pointer", userSelect:"none", padding:"10px 6px" }} onClick={()=>toggleSort(col[0])} title={"Sort by "+col[1]}>
                     {col[1]}<span style={{ opacity:sortKey===col[0]?1:.35, marginLeft:3 }}>{sortKey===col[0] ? (sortDir===1?"▲":"▼") : "↕"}</span>
                   </th>
                 ))}
+                <th style={{ ...th, padding:"10px 6px", borderRight:"none" }} title="Link to the folder holding script, footage & final content">Project Assets</th>
               </tr></thead>
               <tbody>
                 <tr className="addrow" style={{ background:"#FCFDFF" }}>
                   <td style={{ color:C.sub, fontSize:11.5, padding:"6px 7px", whiteSpace:"nowrap" }}>+ new</td>
-                  <td />
-                  <td />
+                  <td /><td />
                   <td><input ref={addRef} value={newTitle} onChange={(e)=>setNewTitle(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); e.stopPropagation(); commitNew(); } }} onBlur={commitNew} placeholder="Type an idea and press Enter…" /></td>
-                  <td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+                  <td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
                 </tr>
                 {list.map((r,ri)=>{
                   const cells = [
@@ -1413,17 +1935,16 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
                     <div style={{ display:"flex", alignItems:"center" }}>{r.imported ? <span title="Imported from Meta — this is a post that already went out, not one of your planned ideas" style={{ flexShrink:0, color:BLUE.accent, fontWeight:900, fontSize:11, paddingLeft:5 }}>⬆</span> : null}<InlineText data-r={ri} data-c={3} value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Idea…" /></div>,
                     <HoverSelect data-r={ri} data-c={4} value={r.category||""} options={L.topics||[]} onChange={(v)=>setTopic(r, v)} placeholder="topic" />,
                     <HoverSelect data-r={ri} data-c={5} value={r.status||stages[0]} options={stages} onChange={(v)=>setStatus(r._id, v)} style={{ background:STAGE_TINT[r.status]||"transparent", color:STAGE_INK[r.status]||C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} />,
-                    <HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={team} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} />,
-                    <div style={{ display:"flex", alignItems:"center" }}><DateCell data-r={ri} data-c={7} value={r.target} onCommit={(v)=>onPatch(r._id,{target:v})} /><button onClick={()=>setStatus(r._id, r.status===ST.PUBLISHED ? ST.SCHEDULED : ST.PUBLISHED)} tabIndex={-1} title={r.imported ? "Published — came in from the Meta import, not ticked by the team" : (r.status===ST.PUBLISHED ? "Published — click to undo" : "Tick when published as scheduled")} style={{ border:"none", cursor:"pointer", background:r.status===ST.PUBLISHED?"#1FA463":"#E9EDF4", color:r.status===ST.PUBLISHED?"#fff":"#A9B2C4", width:18, height:18, borderRadius:5, fontSize:11, fontWeight:900, lineHeight:1, flexShrink:0, marginRight:4, display:"grid", placeItems:"center" }}>✓</button></div>,
-                    ...[["scriptLink",8],["footageLink",9],["contentLink",10]].map((lk)=>(
-                      <div style={{ display:"flex", alignItems:"center" }}><InlineText data-r={ri} data-c={lk[1]} value={r[lk[0]]} onCommit={(v)=>onPatch(r._id,{[lk[0]]:v})} placeholder="—" />{r[lk[0]] && String(r[lk[0]]).trim() && <a href={r[lk[0]]} target="_blank" rel="noopener noreferrer" tabIndex={-1} title="Open" style={{ color:BLUE.accent, fontWeight:800, fontSize:12, textDecoration:"none", paddingRight:4 }}>↗</a>}</div>
-                    )),
+                    <HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={team} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} placeholder="writer" />,
+                    <HoverSelect data-r={ri} data-c={7} value={r.editor||""} options={team} onChange={(v)=>onPatch(r._id,{editor:v})} placeholder="editor" />,
+                    <div style={{ display:"flex", alignItems:"center" }}><DateCell data-r={ri} data-c={8} value={r.target} onCommit={(v)=>onPatch(r._id,{target:v})} /><button onClick={()=>setStatus(r._id, r.status===ST.PUBLISHED ? ST.SCHEDULED : ST.PUBLISHED)} tabIndex={-1} title={r.imported ? "Published — came in from the Meta import, not ticked by the team" : (r.status===ST.PUBLISHED ? "Published — click to undo" : "Tick when published as scheduled")} style={{ border:"none", cursor:"pointer", background:r.status===ST.PUBLISHED?"#1FA463":"#E9EDF4", color:r.status===ST.PUBLISHED?"#fff":"#A9B2C4", width:18, height:18, borderRadius:5, fontSize:11, fontWeight:900, lineHeight:1, flexShrink:0, marginRight:4, display:"grid", placeItems:"center" }}>✓</button></div>,
                   ];
                   return (
                     <tr key={r._id}>
                       {cells.map((node,ci)=>(
-                        <td key={ci} data-r={ri} data-c={ci} style={{ ...(ci===cells.length-1?{ borderRight:"none" }:null), ...(cellSelected(ri,ci)?SEL_CELL:null) }}>{node}</td>
+                        <td key={ci} data-r={ri} data-c={ci} style={cellSelected(ri,ci)?SEL_CELL:null}>{node}</td>
                       ))}
+                      <td style={{ borderRight:"none" }}><LinksCell r={r} onPatch={onPatch} /></td>
                     </tr>
                   );
                 })}
@@ -1605,6 +2126,64 @@ function IdeaPicker({ ideas, pipelineAll, onClose, onConfirm }) {
 }
 
 // the Calendar is a READ-ONLY view of pieces that carry a schedule date — all scheduling happens on the Content tab
+// Below the calendar: when each piece reached each stage (from its stamps) and days between stages.
+function StageHistory({ rows }) {
+  const flow = [ST.IDEA, ST.SCRIPTED, ST.FILMED, ST.EDITED, ST.SCHEDULED, ST.PUBLISHED];
+  const items = (rows||[]).filter((r)=> r.stamps && Object.keys(r.stamps).length && !r.imported);
+  const dcell = (s)=> s ? isoToDisp(String(s).slice(0,10)) : "";
+  const days = (a,b)=>{ if(!a||!b) return null; return Math.max(0, Math.round((new Date(b)-new Date(a))/86400000)); };
+  const th = { textAlign:"left", fontSize:10, fontWeight:700, color:"#fff", padding:"9px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  return (
+    <div style={{ ...card(0), marginTop:14, overflow:"hidden" }}>
+      <div style={{ padding:"13px 16px", borderBottom:`1px solid ${C.line}`, display:"flex", alignItems:"baseline", gap:10, flexWrap:"wrap" }}>
+        <SectionTitle icon={CalendarDays}>Stage timeline</SectionTitle>
+        <span style={{ fontSize:11, color:C.sub }}>When each piece reached each stage, and the days it took between stages.</span>
+      </div>
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%", minWidth:860, borderCollapse:"collapse" }}>
+          <thead><tr style={{ background:BLUE.head }}>
+            <th style={th}>Content</th>
+            <th style={th}>Writer</th>
+            <th style={th}>Editor</th>
+            {flow.map((s)=><th key={s} style={{ ...th, textAlign:"center" }}>{s}</th>)}
+            <th style={{ ...th, textAlign:"center" }}>Total</th>
+          </tr></thead>
+          <tbody>
+            {items.length===0 && <tr><td colSpan={flow.length+4} style={{ padding:0 }}><Empty>No stage history yet. As pieces move through stages on Content, their timeline builds here.</Empty></td></tr>}
+            {items.map((r,ri)=>{
+              const reached = flow.filter((s)=>r.stamps[s]);
+              const total = reached.length>1 ? days(r.stamps[reached[0]], r.stamps[reached[reached.length-1]]) : null;
+              let prev = null;
+              return (
+                <tr key={r._id} style={{ background: ri%2?"#F5F7FB":"#fff" }}>
+                  <td style={{ fontSize:12, fontWeight:600, padding:"8px 8px", maxWidth:200, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", borderBottom:`1px solid ${C.line}` }} title={r.title}>{r.title||"(untitled)"}</td>
+                  <td style={{ fontSize:11.5, padding:"8px 8px", whiteSpace:"nowrap", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}`, color:(r.scriptWriter)?C.ink:"#C7CFDD" }}>{r.scriptWriter||"—"}</td>
+                  <td style={{ fontSize:11.5, padding:"8px 8px", whiteSpace:"nowrap", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}`, color:(r.editor)?C.ink:"#C7CFDD" }}>{r.editor||"—"}</td>
+                  {flow.map((s)=>{
+                    const t = r.stamps[s];
+                    const gap = (t && prev) ? days(prev, t) : null;
+                    if (t) prev = t;
+                    return (
+                      <td key={s} style={{ textAlign:"center", padding:"6px 8px", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}` }}>
+                        {t ? (<div>
+                          <div style={{ fontSize:11.5, fontWeight:600, color:C.ink }}>{dcell(t)}</div>
+                          {gap!=null && <div style={{ fontSize:10, fontWeight:700, color:gap<=2?"#15724A":gap<=5?"#C98A00":C.red, marginTop:1 }}>+{gap}d</div>}
+                        </div>) : <span style={{ color:"#C7CFDD" }}>—</span>}
+                      </td>
+                    );
+                  })}
+                  <td style={{ textAlign:"center", padding:"6px 8px", borderBottom:`1px solid ${C.line}`, borderLeft:`1px solid ${C.line}`, fontSize:12.5, fontWeight:800, color:BLUE.ink }}>{total!=null?total+"d":"—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {items.length>0 && <div style={{ fontSize:11, color:C.sub, padding:"10px 16px" }}>Each date is when the piece first reached that stage. <b>+Nd</b> is days since the previous stage. <b>Total</b> is idea → latest stage.</div>}
+    </div>
+  );
+}
+
 function Calendar({ rows, allTeam, isAdmin, myName, dailyPosts, brands, brandFilter, setBrandFilter, query, setQuery }) {
   const team = (allTeam||[]).filter((t)=>t!=="Unassigned");
   const [member, setMember] = useState(isAdmin ? "All" : (team.includes(myName) ? myName : "All"));
@@ -1646,6 +2225,13 @@ function Calendar({ rows, allTeam, isAdmin, myName, dailyPosts, brands, brandFil
         <button onClick={()=>shift(-1)} style={navBtn}>←</button>
         <span style={{ fontFamily:"inherit", fontSize:18, fontWeight:700, minWidth:160, textAlign:"center" }}>{monthName}</span>
         <button onClick={()=>shift(1)} style={navBtn}>→</button>
+        <div style={{ flex:1 }} />
+        <span style={{ fontSize:11, color:C.sub, fontWeight:600 }}>Writer:</span>
+        {Object.keys(WRITER_COLOR).map((w)=>(
+          <span key={w} style={{ display:"inline-flex", alignItems:"center", gap:5, background:WRITER_TINT[w], border:`1px solid ${WRITER_COLOR[w]}`, borderRadius:999, padding:"3px 9px", fontSize:11, fontWeight:700, color:C.ink }}>
+            <span style={{ width:8, height:8, borderRadius:3, background:WRITER_COLOR[w] }} />{w}
+          </span>
+        ))}
       </div>
       <div style={card(14)}>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(7,1fr)", gap:6 }}>
@@ -1657,10 +2243,10 @@ function Calendar({ rows, allTeam, isAdmin, myName, dailyPosts, brands, brandFil
                 {member!=="All" ? <span style={{ fontSize:10, fontWeight:800, color:c.items.length>=dailyPosts?"#15724A":C.red }}>{c.items.length}/{dailyPosts}</span> : (c.items.length>0 && <span style={{ fontSize:10, fontWeight:700, color:C.sub }}>{c.items.length}</span>)}
               </div>
               <div style={{ display:"grid", gap:3 }}>
-                {c.items.slice(0,3).map((r)=>{ const posted=r.status===ST.PUBLISHED; return (
-                  <div key={r._id} title={`${r.title}\n${[r.brand, r.type, r.owner||r.by, r.status].filter(Boolean).join(" · ")}`} style={{ display:"flex", alignItems:"center", gap:4, background:posted?"#DCF0E4":"#fff", border:`1px solid ${posted?"#8FD3AC":C.line}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
-                    <span style={{ width:7, height:7, borderRadius:2, background:BRAND_DOT[r.brand]||C.sub, flexShrink:0 }} />
-                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:posted?"#15724A":"inherit", textDecoration:posted?"line-through":"none" }}>{r.title||"(untitled)"}</span>
+                {c.items.slice(0,3).map((r)=>{ const posted=r.status===ST.PUBLISHED; const wc=WRITER_COLOR[r.scriptWriter]||"#94A0B4"; const wt=WRITER_TINT[r.scriptWriter]||"#F3F5F9"; return (
+                  <div key={r._id} title={`${r.title}\n${[r.brand, r.type, r.scriptWriter && ("writer "+r.scriptWriter), r.status].filter(Boolean).join(" · ")}`} style={{ display:"flex", alignItems:"center", gap:4, background:wt, border:`1px solid ${wc}`, borderLeft:`3px solid ${wc}`, borderRadius:6, padding:"2px 5px", fontSize:10.5 }}>
+                    <span style={{ width:7, height:7, borderRadius:2, background:wc, flexShrink:0 }} />
+                    <span style={{ flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontWeight:600, color:C.ink, textDecoration:posted?"line-through":"none" }}>{r.title||"(untitled)"}</span>
                     {posted && <span title="Published" style={{ fontWeight:800, color:"#15724A", flexShrink:0, fontSize:11 }}>✓</span>}
                   </div>
                 ); })}
@@ -1670,6 +2256,7 @@ function Calendar({ rows, allTeam, isAdmin, myName, dailyPosts, brands, brandFil
           ) : <div key={i} />)}
         </div>
       </div>
+      <StageHistory rows={rows} />
     </div>
   );
 }
@@ -1708,39 +2295,82 @@ function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
   );
 }
 
-function Collabs({ rows, onAdd, onEdit, onDel }) {
-  const [sort, setSort] = useState("default");
-  const sorted = useMemo(()=>{ const a=[...rows]; const num=(x)=>Number(x)||0;
-    if (sort==="feeDesc") a.sort((x,y)=>num(y.fee)-num(x.fee));
-    else if (sort==="feeAsc") a.sort((x,y)=>num(x.fee)-num(y.fee));
-    else if (sort==="golive") a.sort((x,y)=>(x.goLive||"9999").localeCompare(y.goLive||"9999"));
-    else if (sort==="brief") a.sort((x,y)=>(y.briefDate||"").localeCompare(x.briefDate||""));
-    else if (sort==="partner") a.sort((x,y)=>(x.partner||"").localeCompare(y.partner||""));
-    else if (sort==="status") a.sort((x,y)=>(x.status||"").localeCompare(y.status||""));
-    else if (sort==="type") a.sort((x,y)=>(x.ctype||"").localeCompare(y.ctype||""));
-    else a.sort((x,y)=>(x.code||"").localeCompare(y.code||""));
-    return a; }, [rows, sort]);
+function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSaveDeck }) {
+  const L = lists || {};
+  const team = (L.team||[]).filter((t)=>t!=="Unassigned");
+  const brands = L.brands || [];
+  const [newPartner, setNewPartner] = useState("");
   const fees = rows.reduce((s,c)=>s+(Number(c.fee)||0),0);
-  const SORTS = [["default","Code (default)"],["type","Collab type"],["feeDesc","Fee (high→low)"],["feeAsc","Fee (low→high)"],["golive","Go-live (soonest)"],["brief","Brief date (newest)"],["partner","Partner (A–Z)"],["status","Status"]];
+  const commitNew = ()=>{ const t=(newPartner||"").trim(); if(!t) return; onQuickAdd(t); setNewPartner(""); };
+  const upload = async (b, f) => { if(!f) return; if(f.size>2*1024*1024){ alert("That file is over 2MB. Compress it to keep the app fast."); return; } try{ const du=await fileToDataURL(f); onSaveDeck(b,{ file:du, fileName:f.name }); }catch(e){ alert("Sorry, couldn't read that file."); } };
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 6px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
   return (
     <div>
-      <Toolbar title="Collabs & Partners" sub={`${rows.length} deals · RM ${fees.toLocaleString()} logged`} onAdd={onAdd} addLabel="New collab" />
-      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-        <span style={{ fontSize:12, color:C.sub, fontWeight:600 }}>Sort by</span>
-        <select value={sort} onChange={(e)=>setSort(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px", fontSize:13, fontFamily:"inherit", background:"#fff", outline:"none", cursor:"pointer" }}>
-          {SORTS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
-        </select>
+      <Toolbar title="Collabs & Partners" sub={`${rows.length} deals · RM ${fees.toLocaleString()} logged`} />
+      {/* ── deck section on top (separate from the grid) ── */}
+      <div style={{ ...card(16), marginBottom:16 }}>
+        <SectionTitle icon={FolderIcon}>Collab decks — media kit per brand</SectionTitle>
+        <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Upload a pitch deck / media kit per brand to share with partners.</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))", gap:10 }}>
+          {brands.length===0 && <Empty>Add brands in Lists to attach decks.</Empty>}
+          {brands.map((b)=>{ const d=(decks&&decks[b])||{}; return (
+            <div key={b} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"11px 12px" }}>
+              <BrandTag b={b} />
+              <div style={{ marginTop:10 }}>
+                {d.file ? (
+                  <div>
+                    <div style={{ fontSize:11.5, color:C.sub, marginBottom:8, display:"flex", gap:5, alignItems:"center" }}><span>📎</span><span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={d.fileName}>{d.fileName}</span></div>
+                    <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+                      <button onClick={()=>openDataUrl(d.file)} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:7, padding:"5px 11px", fontSize:11.5, fontWeight:700, cursor:"pointer" }}>Open</button>
+                      {isAdmin && <label style={{ fontSize:11.5, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 10px" }}>Replace<input type="file" accept="application/pdf,image/*" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; upload(b,f); if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label>}
+                      {isAdmin && <button onClick={()=>onSaveDeck(b,{ file:"", fileName:"" })} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.red, borderRadius:7, padding:"5px 9px", fontSize:11.5, fontWeight:700, cursor:"pointer" }}>Remove</button>}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:7 }}><span style={{ fontSize:11.5, color:C.sub }}>No deck yet.</span>{isAdmin ? <label style={{ fontSize:11.5, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 10px", display:"inline-block", width:"fit-content" }}>Upload file<input type="file" accept="application/pdf,image/*" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; upload(b,f); if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label> : null}</div>
+                )}
+              </div>
+            </div>
+          ); })}
+        </div>
       </div>
-      <div style={{ display:"grid", gap:10 }}>
-        {sorted.map((r)=>(
-          <div key={r._id} style={card(14)}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}><span style={{ fontSize:14.5, fontWeight:700 }}>{r.partner}</span><TypePill t={r.ctype} /><BrandTag b={r.brand} /><StatusPill s={r.status} /><span style={{ fontFamily:"inherit", fontSize:20, fontWeight:600, marginLeft:"auto" }}>{Number(r.fee)?`RM ${Number(r.fee).toLocaleString()}`:"—"}</span><div style={{ display:"flex" }}><IconBtn title="Edit" onClick={()=>onEdit(r)}><Pencil size={14} /></IconBtn><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={14} /></IconBtn></div></div>
-            <div style={{ fontSize:12.5, color:C.sub, margin:"8px 0" }}>{r.deliverables} · Talent: {r.talent} · PIC: {r.pic}</div>
-            <div style={{ display:"flex", gap:18, flexWrap:"wrap", fontSize:11.5, color:C.sub, borderTop:`1px solid ${C.line}`, paddingTop:8 }}><span>Go-live <b style={{ color:C.ink }}>{r.goLive || "—"}</b></span><span>Contract <Pill bg={STATUS_TINT[r.contract]} fg={statusInk(r.contract)}>{r.contract}</Pill></span><span>Invoice <Pill bg={STATUS_TINT[r.invoice]} fg={statusInk(r.invoice)}>{r.invoice}</Pill></span><span style={{ marginLeft:"auto" }}>{r.code}</span></div>
-          </div>
-        ))}
+      {/* ── excel-like editable grid of deals ── */}
+      <div style={{ ...card(0), overflow:"visible" }}>
+        <div style={{ overflow:"visible" }}>
+          <table className="xl" style={{ width:"100%" }}>
+            <colgroup>
+              <col /><col style={{ width:158 }} /><col style={{ width:120 }} /><col style={{ width:96 }} /><col style={{ width:92 }} />
+              <col style={{ width:124 }} /><col style={{ width:106 }} /><col style={{ width:106 }} /><col style={{ width:106 }} /><col style={{ width:96 }} /><col style={{ width:40 }} />
+            </colgroup>
+            <thead><tr style={{ background:BLUE.head }}>
+              {["Partner / Client","Type","Brand","Talent","Fee (RM)","Status","Brief","Content due","Go-live","PIC"].map((h)=><th key={h} style={th}>{h}</th>)}
+              <th style={{ ...th, borderRight:"none" }}></th>
+            </tr></thead>
+            <tbody>
+              <tr className="addrow" style={{ background:"#FCFDFF" }}>
+                <td><input value={newPartner} onChange={(e)=>setNewPartner(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commitNew(); } }} onBlur={commitNew} placeholder="+ New partner, press Enter…" /></td>
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+              </tr>
+              {rows.map((r)=>(
+                <tr key={r._id} style={{ background:"#fff" }}>
+                  <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
+                  <td><HoverSelect value={r.ctype||""} options={L.collabTypes||[]} onChange={(v)=>onPatch(r._id,{ctype:v})} placeholder="type" /></td>
+                  <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
+                  <td><HoverSelect value={r.talent||""} options={team} onChange={(v)=>onPatch(r._id,{talent:v})} placeholder="talent" /></td>
+                  <td><InlineText type="number" value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
+                  <td><HoverSelect value={r.status||""} options={L.collabStatus||[]} onChange={(v)=>onPatch(r._id,{status:v})} placeholder="status" style={{ background:STATUS_TINT[r.status]||"transparent", color:statusInk(r.status), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
+                  <td><DateCell value={r.briefDate} onCommit={(v)=>onPatch(r._id,{briefDate:v})} /></td>
+                  <td><DateCell value={r.contentDue} onCommit={(v)=>onPatch(r._id,{contentDue:v})} /></td>
+                  <td><DateCell value={r.goLive} onCommit={(v)=>onPatch(r._id,{goLive:v})} /></td>
+                  <td><HoverSelect value={r.pic||""} options={team} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
+                  <td style={{ borderRight:"none", textAlign:"center" }}><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={12} /></IconBtn></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {rows.length===0 && <Empty>No collabs match your filter.</Empty>}
+      {rows.length===0 && <Empty>No collabs yet. Type a partner name above and press Enter.</Empty>}
     </div>
   );
 }
@@ -1808,49 +2438,64 @@ function CollabDecks({ decks, brands, isAdmin, onSaveDeck }) {
 }
 
 /* ── incentive (follower-growth rewards + incentive trips) ── */
-function Incentive({ data, isAdmin, onSave }) {
+function Incentive({ data, isAdmin, onSave, myName, followers, brands }) {
   const inc = data || {};
-  const maxTier = 100000;
+  const FOL = followers || {};
   const fmt = (n)=>Number(n||0).toLocaleString();
   const tierFor = (n)=>{ let t=null; TRIP_TIERS.forEach((x)=>{ if(n>=x.min) t=x; }); return t; };
-  const nextTier = (n)=>TRIP_TIERS.find((x)=>n<x.min);
   const numInp = { width:"100%", border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 9px", fontSize:14.5, fontWeight:700, fontFamily:"inherit" };
-  // trip is a shared team goal — based on the team's combined current followers
-  const teamTotal = INCENTIVE_PEOPLE.reduce((s,p)=>s+(Number((inc[p.name]||{}).current)||0), 0);
-  const teamTier = tierFor(teamTotal); const teamNext = nextTier(teamTotal); const teamPct = Math.max(0, Math.min(100, (teamTotal/maxTier)*100));
+  // per-brand trip target: Madeleine Learns is set to 100k, other brands pending until a target is chosen
+  const tripTargets = inc._tripTargets || {};
+  const targetFor = (b)=> (tripTargets[b] != null && tripTargets[b] !== "") ? Number(tripTargets[b]) : (b==="Madeleine Learns" ? 100000 : null);
+  const brandFollowers = (b)=> Number((FOL[b]||{}).total)||0;
+  // members see only their own individual card; admins see everyone
+  const myPeople = isAdmin ? INCENTIVE_PEOPLE : INCENTIVE_PEOPLE.filter((p)=>p.name===myName);
   return (
     <div>
       <Toolbar title="Incentive" sub="Follower-growth rewards & incentive trips for the content team" />
       <div style={{ ...card(16), marginBottom:16 }}>
-        <SectionTitle icon={Trophy}>Incentive trips — unlock by total followers</SectionTitle>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))", gap:10, marginTop:12 }}>
+        <SectionTitle icon={Trophy}>Incentive trips — by brand</SectionTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:10, marginTop:12 }}>
           {TRIP_TIERS.map((t)=>(
-            <div key={t.label} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"12px 14px", background:"#F8F9FC" }}>
-              <div style={{ fontSize:24 }}>{t.emoji}</div>
-              <div style={{ fontSize:14.5, fontWeight:700, marginTop:4 }}>{t.label}</div>
-              <div style={{ fontSize:12, color:C.sub, marginTop:2 }}>{">"} {fmt(t.min)} followers</div>
+            <div key={t.label} style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"11px 13px", background:"#F8F9FC" }}>
+              <div style={{ fontSize:22 }}>{t.emoji}</div>
+              <div style={{ fontSize:14, fontWeight:700, marginTop:3 }}>{t.label}</div>
+              <div style={{ fontSize:11.5, color:C.sub, marginTop:2 }}>{">"} {fmt(t.min)} followers</div>
             </div>
           ))}
         </div>
-        <div style={{ marginTop:14, background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"12px 14px" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:9 }}>
-            <span style={{ fontSize:12.5, fontWeight:700 }}>Team total followers</span>
-            <span style={{ fontFamily:"inherit", fontSize:20, fontWeight:800, color:C.navy }}>{fmt(teamTotal)}</span>
-            {teamTier && <Pill bg="#DCF0E4" fg="#15724A">{teamTier.emoji} {teamTier.label} unlocked</Pill>}
-            <span style={{ marginLeft:"auto", fontSize:11.5, color:C.sub, fontWeight:600 }}>{teamNext ? `${fmt(teamNext.min-teamTotal)} to ${teamNext.emoji} ${teamNext.label}` : "🎉 Top tier unlocked"}</span>
-          </div>
-          <div style={{ height:12, background:"#EEF1F6", borderRadius:6, overflow:"hidden" }}><div style={{ width:`${teamPct}%`, height:"100%", background:teamTier?"#1FA463":C.yellow, borderRadius:6, transition:"width .4s" }} /></div>
-          <div style={{ position:"relative", height:16, marginTop:4 }}>
-            {TRIP_TIERS.map((t)=>{ const left=Math.min(100,(t.min/maxTier)*100); const hit=teamTotal>=t.min; return (
-              <span key={t.label} style={{ position:"absolute", left:`${left}%`, transform:"translateX(-50%)", fontSize:10, fontWeight:hit?700:500, color:hit?"#15724A":C.sub, whiteSpace:"nowrap" }}>{t.emoji}{Math.round(t.min/1000)}k</span>
-            ); })}
-          </div>
+        <div style={{ display:"grid", gap:10, marginTop:14 }}>
+          {(brands||[]).map((b)=>{
+            const cur=brandFollowers(b); const target=targetFor(b);
+            if (target==null) return (
+              <div key={b} style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"11px 14px" }}>
+                <BrandTag b={b} /><span style={{ fontSize:12.5, color:C.sub }}>{fmt(cur)} followers</span>
+                <div style={{ flex:1 }} />
+                {isAdmin ? <div style={{ display:"flex", alignItems:"center", gap:6 }}><span style={{ fontSize:11.5, color:C.sub }}>Set target:</span><InlineText type="number" value="" onCommit={(v)=>Number(v)>0 && onSave("_tripTargets",{[b]:Number(v)})} placeholder="e.g. 100000" style={{ width:120, border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 8px", fontSize:12 }} /></div> : <Pill bg="#EEF1F6" fg={C.sub}>Target pending</Pill>}
+              </div>
+            );
+            const tier=tierFor(target); const pct=Math.max(0,Math.min(100,(cur/target)*100)); const hit=cur>=target;
+            return (
+              <div key={b} style={{ background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"12px 14px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:9 }}>
+                  <BrandTag b={b} />
+                  <span style={{ fontFamily:"inherit", fontSize:18, fontWeight:800, color:C.navy }}>{fmt(cur)}</span>
+                  <span style={{ fontSize:12, color:C.sub }}>/ {fmt(target)} target</span>
+                  {tier && <Pill bg={hit?"#DCF0E4":"#FFF3CC"} fg={hit?"#15724A":"#7a5b00"}>{tier.emoji} {tier.label}{hit?" unlocked":""}</Pill>}
+                  <span style={{ marginLeft:"auto", fontSize:11.5, color:C.sub, fontWeight:600 }}>{hit ? "🎉 Target reached" : `${fmt(Math.max(0,target-cur))} to go`}</span>
+                  {isAdmin && <button onClick={()=>{ const v=prompt("Trip target followers for "+b, String(target)); if(v!=null && v!=="") onSave("_tripTargets",{[b]:Number(v)||0}); }} style={{ border:`1px solid ${C.line}`, background:"#fff", borderRadius:7, padding:"4px 8px", fontSize:11, cursor:"pointer", color:C.sub }}>edit</button>}
+                </div>
+                <div style={{ height:11, background:"#EEF1F6", borderRadius:6, overflow:"hidden" }}><div style={{ width:`${pct}%`, height:"100%", background:hit?"#1FA463":C.yellow, borderRadius:6, transition:"width .4s" }} /></div>
+              </div>
+            );
+          })}
         </div>
-        <div style={{ fontSize:11.5, color:C.sub, marginTop:10 }}>The trip is a shared team goal — when the combined follower count passes a milestone, both Madeleine & Serene go. Below, each carries their own individual target / commission.</div>
+        <div style={{ fontSize:11.5, color:C.sub, marginTop:10 }}>Each brand works toward its own trip target using its current follower count (set on <b>Analytics → Current followers by brand</b>). Madeleine Learns is set to 100k; other brands are pending a target.</div>
       </div>
-      <SectionTitle icon={Trophy}>Individual targets & commission</SectionTitle>
+      <SectionTitle icon={Trophy}>Individual targets &amp; commission</SectionTitle>
+      {myPeople.length===0 && <div style={{ ...card(14), marginTop:12, fontSize:12.5, color:C.sub }}>You don't have an individual incentive set up. Speak to an admin if you think this is a mistake.</div>}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))", gap:12, marginTop:12 }}>
-        {INCENTIVE_PEOPLE.map((p)=>{
+        {myPeople.map((p)=>{
           const rec = inc[p.name] || {}; const cur=Number(rec.current)||0; const base=Number(rec.baseline)||0;
           const gained=Math.max(0, cur-base);
           return (
@@ -1931,7 +2576,7 @@ function Pulse({ data }) {
 }
 
 const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
-const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["collabs","Collabs"],["decks","Collab Decks"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"]];
+const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
@@ -1947,19 +2592,6 @@ function Lists({ data, persist }) {
             <div key={t} style={{ display:"flex", alignItems:"center", gap:8, border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px" }}>
               <span style={{ fontSize:12, fontWeight:700, width:90, flexShrink:0 }}>{t}</span>
               <InlineText value={(data.memberPhones||{})[t]||""} onCommit={(v)=>setPhone(t,v)} placeholder="+60 12-345 6789" style={{ flex:1, minWidth:0, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12, fontFamily:"inherit" }} />
-            </div>
-          ))}
-        </div>
-      </div>
-      <div style={{ ...card(16), marginBottom:14 }}>
-        <SectionTitle icon={FolderIcon}>Default script link per topic</SectionTitle>
-        <div style={{ fontSize:11.5, color:C.sub, margin:"6px 0 12px" }}>When someone picks a topic on the Content grid, its script link fills in automatically. They can still clear or overwrite it on any individual piece.</div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(320px,1fr))", gap:8 }}>
-          {(data.lists.topics||[]).map((t)=>(
-            <div key={t} style={{ display:"flex", alignItems:"center", gap:8, border:`1px solid ${C.line}`, borderRadius:9, padding:"7px 10px" }}>
-              <span style={{ fontSize:12, fontWeight:700, width:110, flexShrink:0 }}>{t}</span>
-              <InlineText value={(data.topicLinks||{})[t]||""} onCommit={(v)=>setTopicLink(t,v)} placeholder="Paste default script link…" style={{ flex:1, minWidth:0, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12, fontFamily:"inherit" }} />
-              {(data.topicLinks||{})[t] && <a href={(data.topicLinks||{})[t]} target="_blank" rel="noopener noreferrer" style={{ color:BLUE.accent, fontWeight:800, fontSize:13, textDecoration:"none" }}>↗</a>}
             </div>
           ))}
         </div>
@@ -2233,7 +2865,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
             <div><label style={lbl}>Full name</label><input value={name} onChange={(e)=>setName(e.target.value)} required style={inp()} placeholder="e.g. Serene" /></div>
             <div><label style={lbl}>Email</label><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required style={inp()} placeholder="name@company.com" /></div>
             <div><label style={lbl}>Temporary password</label><input value={pw} onChange={(e)=>setPw(e.target.value)} required minLength={6} style={inp()} placeholder="at least 6 characters" /></div>
-            <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="admin">Admin</option></select></div>
+            <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div>
             {role==="user" && (
               <div>
                 <label style={lbl}>Tabs this member can access</label>
@@ -2269,13 +2901,13 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                     <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
                     {(u.employment || (Array.isArray(u.contentRoles)&&u.contentRoles.length>0)) && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>{u.employment && <Pill bg={u.employment==="Full time"?"#DCE8FB":"#FCE9D6"} fg={u.employment==="Full time"?"#1E3F86":"#8a5a1a"}>{u.employment}</Pill>}{Array.isArray(u.contentRoles)&&u.contentRoles.map((cr)=><Pill key={cr} bg="#EEF1F6" fg={C.sub}>{cr}</Pill>)}</div>}
                   </div>
-                  <Pill bg={u.role==="admin"?C.yellow:"#EEF1F6"} fg={u.role==="admin"?C.navy:C.sub}>{u.role==="admin"?"Admin":"Member"}</Pill>
+                  <Pill bg={u.role==="admin"?C.yellow:u.role==="editor"?"#E5DEFA":"#EEF1F6"} fg={u.role==="admin"?C.navy:u.role==="editor"?"#4B2E9E":C.sub}>{u.role==="admin"?"Admin":u.role==="editor"?"Editor":"Member"}</Pill>
                   {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
                 </div>
                 {editId===u.id && (
                   <div style={{ borderTop:`1px solid ${C.line}`, padding:"10px 12px", background:"#FAFBFD" }}>
                     <label style={lbl}>Role</label>
-                    <select value={eRole} onChange={(e)=>setERole(e.target.value)} style={{ ...inp(), marginBottom:10 }}><option value="user">Member</option><option value="admin">Admin</option></select>
+                    <select value={eRole} onChange={(e)=>setERole(e.target.value)} style={{ ...inp(), marginBottom:10 }}><option value="user">Member</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
                     {eRole==="user" && (
                       <div style={{ marginBottom:10 }}>
                         <label style={lbl}>Tabs this member can access</label>
