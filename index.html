@@ -85,7 +85,7 @@ const Trophy = (p) => <Svg {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path 
 /* ── theme ── */
 const C = { navy:"#15233E", navy2:"#1E3050", ink:"#11192B", sub:"#5B6680", line:"#E4E8F0", canvas:"#F6F7FB", card:"#FFFFFF", yellow:"#F5C518", red:"#E8192C" };
 const BRAND_DOT = { BBBwealth:"#2D6CDF", "KL Money":"#F5C518", Madwithmoney:"#E8192C" };
-const STATUS_TINT = { Idea:"#E8EEF7", Approved:"#FFF3CC", Scripting:"#FCE9D6", Design:"#E7DEF5", Review:"#FFE0CC", Scheduled:"#CFE8F7", Posted:"#D6EFD6", "On Hold":"#ECEEF2", Killed:"#F9D7D7", Backlog:"#E8EEF7", "In Progress":"#FCE9D6", Parked:"#ECEEF2", Planned:"#E8EEF7", Confirmed:"#FFF3CC", Delayed:"#F9D7D7", Pitching:"#E8EEF7", Negotiating:"#FFF3CC", "Contract Signed":"#FCE9D6", "In Production":"#E7DEF5", Delivered:"#FFE0CC", Invoiced:"#CFE8F7", Paid:"#D6EFD6", Completed:"#D6EFD6", Dropped:"#F9D7D7", Pending:"#FFF3CC", Done:"#D6EFD6", "N/A":"#ECEEF2", Scripted:"#FCE9D6", Filmed:"#E7DEF5", Edited:"#FFE0CC", Published:"#D6EFD6" };
+const STATUS_TINT = { Idea:"#E8EEF7", Approved:"#FFF3CC", Scripting:"#FCE9D6", Design:"#E7DEF5", Review:"#FFE0CC", Scheduled:"#CFE8F7", Posted:"#D6EFD6", "On Hold":"#ECEEF2", Killed:"#F9D7D7", Backlog:"#E8EEF7", "In Progress":"#FCE9D6", Parked:"#ECEEF2", Planned:"#E8EEF7", Confirmed:"#FFF3CC", Delayed:"#F9D7D7", Pitching:"#E8EEF7", Negotiating:"#FFF3CC", "Contract Signed":"#FCE9D6", "In Production":"#E7DEF5", Delivered:"#FFE0CC", Invoiced:"#CFE8F7", Paid:"#D6EFD6", Completed:"#D6EFD6", Dropped:"#F9D7D7", Pending:"#FFF3CC", Done:"#D6EFD6", "N/A":"#ECEEF2", Scripted:"#FCE9D6", Filmed:"#E7DEF5", Edited:"#FFE0CC", Published:"#D6EFD6", "Not Invoiced":"#ECEEF2", "Partially Paid":"#FFF3CC" };
 const statusInk = (s) => (["Killed","Dropped","Delayed"].includes(s) ? "#A11" : C.ink);
 const PRIORITY = { High:{bg:C.red,fg:"#fff"}, Medium:{bg:C.yellow,fg:C.ink}, Low:{bg:"#DCE2EC",fg:C.sub} };
 const COLLAB_TYPE = {
@@ -179,7 +179,8 @@ const SEED = {
     priority:["High","Medium","Low"],
     team:["Hubert","Serene","Madeleine","Mark","Unassigned"],
     calStatus:["Planned","Confirmed","Scheduled","Posted","Delayed"],
-    collabStatus:["Pitching","Negotiating","Contract Signed","In Production","Delivered","Invoiced","Paid","Completed","Dropped"],
+    collabStatus:["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"],
+    collabPayStatus:["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
     topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
@@ -231,7 +232,19 @@ const syncCalendar = (calendar, item, status) => {
 };
 const calStatusForPipe = (it) => (it.status === ST.PUBLISHED || it.status === "Posted") ? "Posted" : (it.status === ST.SCHEDULED ? "Scheduled" : "Planned");
 const syncsToCal = (it) => !!(it.target || it.status === ST.SCHEDULED || it.status === ST.PUBLISHED);
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {};
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {}; d.editors = d.editors || []; d.retainers = d.retainers || []; if (!d.lists.collabPayStatus) d.lists.collabPayStatus = ["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"];
+  // ── one-time collab split: separate content status from payment status ──
+  if (!d.settings.collabSplitV1) {
+    d.lists.collabStatus = ["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"];
+    d.collabs = (d.collabs || []).map((c) => {
+      let status = c.status, pay = c.payStatus || "Not Invoiced";
+      if (status === "Invoiced") { pay = "Invoiced"; status = "Delivered"; }
+      else if (status === "Paid" || status === "Completed") { pay = "Paid"; status = "Delivered"; }
+      else if (status === "Contract Signed") { status = "Confirmed"; }
+      return { ...c, status, payStatus: pay };
+    });
+    d.settings.collabSplitV1 = true;
+  }
   // ── one-time merge: Idea Bank + Pipeline become a single board (data.ideas kept as an untouched archive) ──
   if (!d.settings.mergedV1) {
     const fromPipe = (d.pipeline || []).map((p) => ({ ...p, status: toStage(p.status), by: p.by || p.owner || "", dateAdded: p.dateAdded || "", stamps: p.stamps || {} }));
@@ -315,10 +328,10 @@ const fieldSets = (L) => ({
   collabs: [
     { k:"partner", l:"Partner / Client", t:"text", full:1 },
     { k:"ctype", l:"Collab Type", t:"select", o:L.collabTypes }, { k:"brand", l:"Our Brand", t:"select", o:L.brands },
-    { k:"talent", l:"Talent", t:"select", o:L.team }, { k:"fee", l:"Fee (RM)", t:"number" },
-    { k:"deliverables", l:"Deliverables", t:"text", full:1 }, { k:"status", l:"Status", t:"select", o:L.collabStatus },
+    { k:"fee", l:"Fee (RM)", t:"number" },
+    { k:"deliverables", l:"Deliverables", t:"text", full:1 }, { k:"status", l:"Content status", t:"select", o:L.collabStatus }, { k:"payStatus", l:"Payment status", t:"select", o:L.collabPayStatus },
     { k:"briefDate", l:"Brief Date", t:"date" }, { k:"contentDue", l:"Content Due", t:"date" }, { k:"goLive", l:"Go-Live", t:"date" },
-    { k:"contract", l:"Contract", t:"select", o:L.docStatus }, { k:"invoice", l:"Invoice", t:"select", o:L.docStatus }, { k:"pic", l:"PIC", t:"select", o:L.team },
+    { k:"pic", l:"PIC", t:"select", o:L.team },
     { k:"notes", l:"Notes", t:"textarea", full:1 },
   ],
 });
@@ -399,7 +412,10 @@ function App() {
   const currentUser = session.user || {};
   const role = (currentUser.app_metadata && currentUser.app_metadata.role) || "user";
   const isAdmin = role === "admin";
-  const isEditor = role === "editor"; // editors get a restricted, edit-only view of the content assigned to them
+  // Editors are managed inside the app (Admin → mark as Editor). Anyone whose email
+  // is on data.editors gets the restricted, edit-only view — no Supabase role change needed.
+  const editorEmails = (data.editors || []).map((e)=>String(e||"").toLowerCase());
+  const isEditor = !isAdmin && (role === "editor" || editorEmails.includes(String(currentUser.email||"").toLowerCase()));
   const myName = (currentUser.user_metadata && currentUser.user_metadata.name) || currentUser.email || "";
   const L = data.lists;
   const matchBrand = (r) => brandFilter === "All" || r.brand === brandFilter;
@@ -483,7 +499,11 @@ function App() {
   // editor payouts: rate + payee details, and submitted invoices
   const savePayout = (name, patch) => persist({ ...data, payouts: { ...(data.payouts||{}), [name]: { ...((data.payouts||{})[name]||{}), ...patch } } });
   const submitInvoice = (name, invoice) => { const cur=(data.payouts||{})[name]||{}; persist({ ...data, payouts:{ ...(data.payouts||{}), [name]:{ ...cur, invoices:[...(cur.invoices||[]), invoice] } } }); };
-  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, ctype:"", brand:(L.brands[0]||""), talent:"", fee:"", deliverables:"", status:"Pitching", briefDate:"", contentDue:"", goLive:"", contract:"Not started", invoice:"Not started", pic:"", notes:"" }] }); };
+  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, ctype:"", brand:(L.brands[0]||""), fee:"", deliverables:"", status:"Pitching", payStatus:"Not Invoiced", briefDate:"", contentDue:"", goLive:"", pic:"", notes:"" }] }); };
+  // long-term / retainer projects: cadence + progress + DCU
+  const patchRetainer = (id, patch) => persist({ ...data, retainers: (data.retainers||[]).map((r)=>(r._id===id ? { ...r, ...patch } : r)) });
+  const quickAddRetainer = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, retainers:[...(data.retainers||[]), { _id:uid(), partner:t, brand:(L.brands[0]||""), start:"", end:"", perMonth:3, months:6, delivered:0, dcu:false, fee:"", payStatus:"Not Invoiced", notes:"" }] }); };
+  const delRetainer = (id) => persist({ ...data, retainers:(data.retainers||[]).filter((r)=>r._id!==id) });
   // account-level follower count per brand, keyed in by hand + stamped with the day it was read
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
   const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
@@ -512,16 +532,29 @@ function App() {
     if (!res.ok) throw new Error(out.error || `Failed (${res.status})`);
     return out;
   };
+  // App-managed editor list — the source of truth for editor mode (no Supabase role change needed).
+  const setEditorFlag = (base, email, on) => {
+    const e = String(email||"").toLowerCase(); if (!e) return base;
+    const cur = (base.editors || []).filter((x)=>String(x||"").toLowerCase()!==e);
+    return { ...base, editors: on ? [...cur, e] : cur };
+  };
   const enrolUser = async ({ name, email, password, role:newRole, tabs, contentRoles, employment }) => {
     try {
       await callAdminFn({ action:"create", name, email, password, role:newRole, tabs, contentRoles, employment });
-      if (name && !data.lists.team.includes(name)) persist({ ...data, lists:{ ...data.lists, team:[...data.lists.team, name] } });
+      let next = data;
+      if (name && !data.lists.team.includes(name)) next = { ...next, lists:{ ...next.lists, team:[...next.lists.team, name] } };
+      next = setEditorFlag(next, email, newRole==="editor");
+      if (next !== data) persist(next);
       return { ok: true };
     } catch (e) { return { error: String((e && e.message) || e) }; }
   };
   const listMembers = () => callAdminFn({ action:"list" });
   const removeMember = (id) => callAdminFn({ action:"delete", id });
-  const updateMember = ({ id, role, tabs, contentRoles, employment }) => callAdminFn({ action:"update", id, role, tabs, contentRoles, employment });
+  const updateMember = async ({ id, email, role, tabs, contentRoles, employment }) => {
+    const out = await callAdminFn({ action:"update", id, role, tabs, contentRoles, employment });
+    persist(setEditorFlag(data, email, role==="editor"));
+    return out;
+  };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const NAV = [
     { id:"pipeline", label:"Content", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays }, { id:"insight", label:"Insight", icon:TrendingUp }, { id:"analytics", label:"Analytics", icon:TrendingUp },
@@ -576,7 +609,7 @@ function App() {
             ? <EditorContent rows={data.pipeline.filter((r)=>!r.imported && r.editor===myName)} myName={myName} onSetStatus={(id,s)=>setPipelineStatus(id,s)} />
             : <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />)}
           {tab==="calendar" && <Calendar rows={filt(data.pipeline).filter((r)=>!r.imported)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} />}
+          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} retainers={data.retainers||[]} onPatchRetainer={patchRetainer} onQuickAddRetainer={quickAddRetainer} onDelRetainer={delRetainer} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
           {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} />}
@@ -1482,9 +1515,9 @@ function Dashboard({ data, setTab, myName }) {
   const kpis = [{ n:inProd, l:"In Production", c:C.yellow },{ n:scheduled, l:"Scheduled", c:BLUE.accent },{ n:posted, l:"Published", c:"#1FA463" },{ n:ideas, l:"Ideas", c:C.red }];
   const byBrand = data.lists.brands.map((b)=>({ b, n:p.filter((r)=>r.brand===b).length }));
   const maxB = Math.max(1, ...byBrand.map((x)=>x.n));
-  const active = data.collabs.filter((c)=>["Negotiating","Contract Signed","In Production","Delivered"].includes(c.status)).length;
-  const awaiting = data.collabs.filter((c)=>c.status==="Invoiced").length;
-  const donePaid = data.collabs.filter((c)=>["Paid","Completed"].includes(c.status)).length;
+  const active = data.collabs.filter((c)=>["Negotiating","Confirmed","In Production","Delivered"].includes(c.status)).length;
+  const awaiting = data.collabs.filter((c)=>c.payStatus==="Invoiced"||c.payStatus==="Partially Paid").length;
+  const donePaid = data.collabs.filter((c)=>c.payStatus==="Paid").length;
   const fees = data.collabs.reduce((s,c)=>s+(Number(c.fee)||0),0);
   const upcoming = p.filter((c)=>c.target).sort((a,b)=>a.target.localeCompare(b.target)).slice(0,4);
   const wkPlans = (data.weeklyPlans||[]).filter((w)=>w.week===THIS_MON);
@@ -2295,7 +2328,7 @@ function SchedulePicker({ approved, presetDate, onClose, onConfirm }) {
   );
 }
 
-function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSaveDeck }) {
+function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSaveDeck, retainers, onPatchRetainer, onQuickAddRetainer, onDelRetainer }) {
   const L = lists || {};
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
   const brands = L.brands || [];
@@ -2335,15 +2368,16 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
         </div>
       </div>
       {/* ── excel-like editable grid of deals ── */}
+      <div style={{ fontSize:12.5, fontWeight:700, color:C.navy, margin:"4px 2px 8px" }}>Deals &amp; campaigns</div>
       <div style={{ ...card(0), overflow:"visible" }}>
         <div style={{ overflow:"visible" }}>
           <table className="xl" style={{ width:"100%" }}>
             <colgroup>
-              <col /><col style={{ width:158 }} /><col style={{ width:120 }} /><col style={{ width:96 }} /><col style={{ width:92 }} />
-              <col style={{ width:124 }} /><col style={{ width:106 }} /><col style={{ width:106 }} /><col style={{ width:106 }} /><col style={{ width:96 }} /><col style={{ width:40 }} />
+              <col /><col style={{ width:150 }} /><col style={{ width:104 }} /><col style={{ width:84 }} /><col style={{ width:128 }} /><col style={{ width:128 }} />
+              <col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:92 }} /><col style={{ width:40 }} />
             </colgroup>
             <thead><tr style={{ background:BLUE.head }}>
-              {["Partner / Client","Type","Brand","Talent","Fee (RM)","Status","Brief","Content due","Go-live","PIC"].map((h)=><th key={h} style={th}>{h}</th>)}
+              {["Partner / Client","Type","Brand","Fee (RM)","Content status","Payment status","Brief","Content due","Go-live","PIC"].map((h)=><th key={h} style={th}>{h}</th>)}
               <th style={{ ...th, borderRight:"none" }}></th>
             </tr></thead>
             <tbody>
@@ -2356,9 +2390,9 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
                   <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
                   <td><HoverSelect value={r.ctype||""} options={L.collabTypes||[]} onChange={(v)=>onPatch(r._id,{ctype:v})} placeholder="type" /></td>
                   <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
-                  <td><HoverSelect value={r.talent||""} options={team} onChange={(v)=>onPatch(r._id,{talent:v})} placeholder="talent" /></td>
                   <td><InlineText type="number" value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
                   <td><HoverSelect value={r.status||""} options={L.collabStatus||[]} onChange={(v)=>onPatch(r._id,{status:v})} placeholder="status" style={{ background:STATUS_TINT[r.status]||"transparent", color:statusInk(r.status), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
+                  <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
                   <td><DateCell value={r.briefDate} onCommit={(v)=>onPatch(r._id,{briefDate:v})} /></td>
                   <td><DateCell value={r.contentDue} onCommit={(v)=>onPatch(r._id,{contentDue:v})} /></td>
                   <td><DateCell value={r.goLive} onCommit={(v)=>onPatch(r._id,{goLive:v})} /></td>
@@ -2371,6 +2405,71 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
         </div>
       </div>
       {rows.length===0 && <Empty>No collabs yet. Type a partner name above and press Enter.</Empty>}
+
+      {/* ── long-term / retainer projects ── */}
+      <RetainerSection retainers={retainers||[]} brands={brands} L={L} onPatch={onPatchRetainer} onQuickAdd={onQuickAddRetainer} onDel={onDelRetainer} />
+    </div>
+  );
+}
+
+/* ── long-term / retainer project tracker (cadence + progress + DCU) ── */
+function RetainerSection({ retainers, brands, L, onPatch, onQuickAdd, onDel }) {
+  const [newP, setNewP] = useState("");
+  const commit = ()=>{ const t=(newP||"").trim(); if(!t) return; onQuickAdd(t); setNewP(""); };
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 6px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  const total = (r)=> (Number(r.perMonth)||0) * (Number(r.months)||0);
+  const bar = (r)=>{ const t=total(r); const done=Math.min(Number(r.delivered)||0, t||9999); const pct=t?Math.round(done/t*100):0; return (
+    <div style={{ minWidth:120 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, fontWeight:700, color:C.sub, marginBottom:3 }}><span>{done}/{t||"—"}</span><span>{t?pct+"%":""}</span></div>
+      <div style={{ height:7, borderRadius:4, background:"#EEF1F6", overflow:"hidden" }}><div style={{ width:(t?pct:0)+"%", height:"100%", background:pct>=100?"#1FA463":BLUE.accent, borderRadius:4 }} /></div>
+    </div>
+  ); };
+  return (
+    <div style={{ marginTop:20 }}>
+      <div style={{ fontSize:12.5, fontWeight:700, color:C.navy, margin:"4px 2px 4px", display:"flex", alignItems:"center", gap:7 }}><Briefcase size={15} /> Long-term / retainer projects</div>
+      <div style={{ fontSize:11, color:C.sub, margin:"0 2px 8px" }}>Track ongoing engagements — cadence (e.g. 3 posts / month), the contract window, delivery progress, and whether DCU (Digital Copyright Usage) is included.</div>
+      <div style={{ ...card(0), overflow:"visible" }}>
+        <div style={{ overflow:"visible" }}>
+          <table className="xl" style={{ width:"100%" }}>
+            <colgroup>
+              <col /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:104 }} /><col style={{ width:78 }} /><col style={{ width:74 }} /><col style={{ width:150 }} /><col style={{ width:80 }} /><col style={{ width:96 }} /><col style={{ width:130 }} /><col style={{ width:40 }} />
+            </colgroup>
+            <thead><tr style={{ background:BLUE.head }}>
+              {["Partner / Client","Brand","Start","End","Per month","Months","Delivered / target","DCU","Fee (RM)","Payment"].map((h)=><th key={h} style={th}>{h}</th>)}
+              <th style={{ ...th, borderRight:"none" }}></th>
+            </tr></thead>
+            <tbody>
+              <tr className="addrow" style={{ background:"#FCFDFF" }}>
+                <td><input value={newP} onChange={(e)=>setNewP(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commit(); } }} onBlur={commit} placeholder="+ New retainer, press Enter…" /></td>
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+              </tr>
+              {(retainers||[]).map((r)=>(
+                <tr key={r._id} style={{ background:"#fff" }}>
+                  <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
+                  <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
+                  <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
+                  <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
+                  <td><InlineText type="number" value={r.perMonth} onCommit={(v)=>onPatch(r._id,{perMonth:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
+                  <td><InlineText type="number" value={r.months} onCommit={(v)=>onPatch(r._id,{months:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
+                  <td style={{ padding:"4px 8px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <input type="number" value={r.delivered==null?"":r.delivered} onChange={(e)=>onPatch(r._id,{delivered:Number(e.target.value)||0})} style={{ width:44, border:`1px solid ${C.line}`, borderRadius:6, padding:"3px 5px", fontSize:12, fontFamily:"inherit", textAlign:"right" }} />
+                      {bar(r)}
+                    </div>
+                  </td>
+                  <td style={{ textAlign:"center" }}>
+                    <button type="button" onClick={()=>onPatch(r._id,{dcu:!r.dcu})} title="Digital Copyright Usage included?" style={{ border:`1.5px solid ${r.dcu?"#15724A":C.line}`, background:r.dcu?"#DCF0E4":"#fff", color:r.dcu?"#15724A":C.sub, borderRadius:7, padding:"4px 9px", fontSize:11, fontWeight:800, cursor:"pointer" }}>{r.dcu?"✓ Yes":"No"}</button>
+                  </td>
+                  <td><InlineText type="number" value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:Number(v)||0})} placeholder="0" style={{ textAlign:"right" }} /></td>
+                  <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
+                  <td style={{ borderRight:"none", textAlign:"center" }}><IconBtn title="Delete" danger onClick={()=>onDel(r._id)}><Trash2 size={12} /></IconBtn></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {(retainers||[]).length===0 && <Empty>No retainer projects yet. Type a partner name above and press Enter.</Empty>}
     </div>
   );
 }
@@ -2575,7 +2674,7 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabTypes:"Collab Types", docStatus:"Doc Status" };
 const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
@@ -2840,6 +2939,9 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
   const [editId,setEditId]=useState(null); const [eRole,setERole]=useState("user"); const [eTabs,setETabs]=useState([]); const [eBusy,setEBusy]=useState(false);
   const [cRoles,setCRoles]=useState([]); const [emp,setEmp]=useState("Full time");
   const [eRoles,setERoles]=useState([]); const [eEmp,setEEmp]=useState("Full time");
+  // App-managed editors: an email on data.editors is an editor even if their Supabase role is "user".
+  const appEditors = ((data && data.editors) || []).map((e)=>String(e||"").toLowerCase());
+  const isAppEditor = (u)=> u.role==="editor" || appEditors.includes(String(u.email||"").toLowerCase());
   const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
   const roleChip = (label, on, onClick) => <button type="button" key={label} onClick={onClick} style={{ border:`1.5px solid ${on?C.navy:C.line}`, background:on?"#F3F6FC":"#fff", color:on?C.navy:C.sub, borderRadius:8, padding:"5px 9px", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{on?"✓ ":""}{label}</button>;
   const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>setMembers(r.users||[])).catch((e)=>setMErr(String((e&&e.message)||e))); };
@@ -2849,12 +2951,12 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
     const res = await onEnrol({ name, email:email.trim(), password:pw, role, tabs: role==="admin"?null:tabs, contentRoles:cRoles, employment:emp });
     setBusy(false);
     if (res.error) setMsg({ ok:false, text:res.error });
-    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); setCRoles([]); setEmp("Full time"); load(); }
+    else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":role==="editor"?"Editor":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); setCRoles([]); setEmp("Full time"); load(); }
   };
   const remove = async (u)=>{ const ok = window.confirm ? window.confirm(`Remove ${u.email}? They will lose access to Content Hub immediately.`) : true; if(!ok) return; try{ await onRemoveUser(u.id); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } };
-  const startEdit = (u)=>{ setEditId(u.id); setERole(u.role||"user"); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); setERoles(Array.isArray(u.contentRoles)?u.contentRoles.slice():[]); setEEmp(u.employment||"Full time"); };
+  const startEdit = (u)=>{ setEditId(u.id); setERole(isAppEditor(u)?"editor":(u.role||"user")); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); setERoles(Array.isArray(u.contentRoles)?u.contentRoles.slice():[]); setEEmp(u.employment||"Full time"); };
   const toggleETab = (id)=>{ if(id==="pipeline") return; setETabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]); };
-  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, role:eRole, tabs: eRole==="admin"?null:eTabs, contentRoles:eRoles, employment:eEmp }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
+  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, email:u.email, role:eRole, tabs: eRole==="admin"?null:eTabs, contentRoles:eRoles, employment:eEmp }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
   return (
     <div>
       <Toolbar title="Admin" sub="Enrol team members, set which tabs they can access, and manage logins" />
@@ -2865,7 +2967,9 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
             <div><label style={lbl}>Full name</label><input value={name} onChange={(e)=>setName(e.target.value)} required style={inp()} placeholder="e.g. Serene" /></div>
             <div><label style={lbl}>Email</label><input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} required style={inp()} placeholder="name@company.com" /></div>
             <div><label style={lbl}>Temporary password</label><input value={pw} onChange={(e)=>setPw(e.target.value)} required minLength={6} style={inp()} placeholder="at least 6 characters" /></div>
-            <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div>
+            <div><label style={lbl}>Role</label><select value={role} onChange={(e)=>setRole(e.target.value)} style={inp()}><option value="user">Member</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
+              {role==="editor" && <div style={{ fontSize:10.5, color:C.sub, marginTop:5, lineHeight:1.5 }}>Editors only see content assigned to them (as Editor), can open Project Assets and mark a piece Edited, plus the Payout tab. Nothing else is editable.</div>}
+            </div>
             {role==="user" && (
               <div>
                 <label style={lbl}>Tabs this member can access</label>
@@ -2901,7 +3005,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                     <div style={{ fontSize:10.5, color:C.sub, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{u.email}{Array.isArray(u.tabs)?` · ${u.tabs.length} tabs`:(u.role==="admin"?"":" · all tabs")}</div>
                     {(u.employment || (Array.isArray(u.contentRoles)&&u.contentRoles.length>0)) && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>{u.employment && <Pill bg={u.employment==="Full time"?"#DCE8FB":"#FCE9D6"} fg={u.employment==="Full time"?"#1E3F86":"#8a5a1a"}>{u.employment}</Pill>}{Array.isArray(u.contentRoles)&&u.contentRoles.map((cr)=><Pill key={cr} bg="#EEF1F6" fg={C.sub}>{cr}</Pill>)}</div>}
                   </div>
-                  <Pill bg={u.role==="admin"?C.yellow:u.role==="editor"?"#E5DEFA":"#EEF1F6"} fg={u.role==="admin"?C.navy:u.role==="editor"?"#4B2E9E":C.sub}>{u.role==="admin"?"Admin":u.role==="editor"?"Editor":"Member"}</Pill>
+                  <Pill bg={u.role==="admin"?C.yellow:isAppEditor(u)?"#E5DEFA":"#EEF1F6"} fg={u.role==="admin"?C.navy:isAppEditor(u)?"#4B2E9E":C.sub}>{u.role==="admin"?"Admin":isAppEditor(u)?"Editor":"Member"}</Pill>
                   {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
                 </div>
                 {editId===u.id && (
