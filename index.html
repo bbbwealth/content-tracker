@@ -943,7 +943,7 @@ function InsightOld({ rows, allRows, lists, onPatch, onCreate, onLink, followers
       </div>
       {importing && <ImportModal pieces={rows||[]} lists={L} onImport={(res)=>{ (res.updates||[]).forEach((m)=>onPatch(m.id, m.patch)); if(res.creates&&res.creates.length) onCreate(res.creates); }} onClose={()=>setImporting(false)} />}
       {/* only offer pieces that actually went out (Published), that didn't come from Meta, and that haven't already taken metrics from a link */}
-      {linkRow && <LinkModal source={linkRow} candidates={(allRows||rows||[]).filter((r)=>r._id!==linkRow._id && !r.imported && !r.importedAt && r.status===ST.PUBLISHED)} onLink={(tid)=>{ onLink(linkRow._id, tid); setLinkRow(null); }} onClose={()=>setLinkRow(null)} />}
+      {linkRow && <LinkModal source={linkRow} candidates={(allRows||rows||[]).filter((r)=>r._id!==linkRow._id && !r.imported && r.status===ST.PUBLISHED)} onLink={(tid)=>{ onLink(linkRow._id, tid); setLinkRow(null); }} onClose={()=>setLinkRow(null)} />}
       {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
         <div>
           {unattributed.length>0 && (
@@ -1096,8 +1096,9 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onImport, onConnect,
   const writerOf = (r)=>{ const c=connectedPiece(r); return c ? (c.scriptWriter||c.owner||c.by||"") : ""; };
   const topicOf = (r)=>{ const c=connectedPiece(r); return c ? (c.category||"") : ""; };
   const pubDate = (r)=> r.publishedAt || r.target || "";
-  // content pieces available to connect to: team-planned pieces marked Published (not imports)
-  const connectable = (allRows||[]).filter((r)=>r.status===ST.PUBLISHED && !r.importedAt && !r.imported);
+  // content pieces available to connect to: team-planned pieces marked Published (not imports).
+  // Use !r.imported only — a planned piece may carry a stale importedAt from an old match, but it's still connectable.
+  const connectable = (allRows||[]).filter((r)=>r.status===ST.PUBLISHED && !r.imported);
   const lastImport = pub.map((r)=>r.importedAtTime).filter(Boolean).sort().pop() || "";
   const anyFilter = !!(fConn || fWriter || fTopic);
   const clearFilters = ()=>{ setFConn(""); setFWriter(""); setFTopic(""); };
@@ -1381,7 +1382,7 @@ function Analytics({ rows, lists, followers, onSaveFollowers }) {
   const monthName = (ym)=>{ const m=/^(\d{4})-(\d{2})$/.exec(ym); if(!m) return ym; return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m[2])-1]+" "+m[1]; };
 
   // ── performance: imported posts, attributed via their connected content piece ──
-  const posts = P.filter((r)=>r.importedAt);
+  const posts = P.filter((r)=>r.imported);
   const connOf = (r)=> r.connectedTo ? byId[r.connectedTo] : null;
   const topicOf = (r)=>{ const c=connOf(r); return c ? (c.category||"") : ""; };
   const writerOf = (r)=>{ const c=connOf(r); return c ? (c.scriptWriter||c.owner||c.by||"") : ""; };
@@ -1395,7 +1396,7 @@ function Analytics({ rows, lists, followers, onSaveFollowers }) {
   const byWriter = agg(writerOf);
 
   // ── throughput: planned content pieces, by stage stamps ──
-  const content = P.filter((r)=>!r.importedAt && !r.imported);
+  const content = P.filter((r)=>!r.imported);
   const monthsPresent = (()=>{ const set=new Set(); content.forEach((r)=>Object.values(r.stamps||{}).forEach((v)=>{ const mm=String(v).slice(0,7); if(/^\d{4}-\d{2}$/.test(mm)) set.add(mm); })); return set; })();
   const curMonth = (()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); })();
   const [ym, setYm] = useState(curMonth);
