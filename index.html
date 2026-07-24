@@ -508,6 +508,15 @@ function App() {
     list.forEach((p)=>{ rows.push({ ...p, _id:uid(), code:nextCode(rows,"C") }); });
     persist({ ...data, pipeline:rows });
   };
+  // ONE atomic write for a whole Meta import — updates AND creates together.
+  // (Doing 37 separate patch calls all read the same stale `data`, so only the last would survive.)
+  const importAll = ({ updates, creates }) => {
+    snapshotPipeline();
+    const byId = {}; (updates||[]).forEach((m)=>{ byId[m.id] = { ...(byId[m.id]||{}), ...m.patch }; });
+    let rows = data.pipeline.map((r)=> byId[r._id] ? { ...r, ...byId[r._id] } : r);
+    (creates||[]).forEach((p)=>{ rows.push({ ...p, _id:uid(), code:nextCode(rows,"C") }); });
+    persist({ ...data, pipeline: rows });
+  };
   // excel-style quick add: type a title on the blank bottom row and it becomes a piece
   const quickAddPiece = (title) => {
     const row = withStamp({ _id:uid(), code:nextCode(data.pipeline,"C"), brand:(brandFilter!=="All"?brandFilter:(L.brands[0]||"")), type:"", kind:"Organic", category:"", title, status:STAGES[0], platform:"Instagram", owner:myName, by:myName, dateAdded:nowISO(), scriptWriter:"", target:"", scriptLink:"", footageLink:"", contentLink:"", notes:"", adminComment:"", crossPost:[] }, STAGES[0]);
@@ -619,7 +628,7 @@ function App() {
         </header>
 
         <div style={{ padding:24, flex:1 }}>
-          {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onConnect={connectInsight} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
+          {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onImport={importAll} onConnect={connectInsight} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
           {tab==="pipeline" && (isEditor
             ? <EditorContent rows={data.pipeline.filter((r)=>!r.imported && r.editor===myName)} myName={myName} onSetStatus={(id,s)=>setPipelineStatus(id,s)} />
             : <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />)}
@@ -683,7 +692,7 @@ const parseMetaCsvDate = (s) => {
   if (m) return `${m[3]}-${String(m[1]).padStart(2,"0")}-${String(m[2]).padStart(2,"0")}`;
   return parseMetaDate(t);
 };
-function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
+function ImportModal({ pieces, lists, onImport, onClose }) {
   const [result, setResult] = useState(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -805,7 +814,7 @@ function ImportModal({ pieces, lists, onApply, onCreate, onClose }) {
                   </div>
                 ))}
               </div>
-              <button disabled={!result.updates.length && !result.creates.length} onClick={()=>{ if(result.updates.length) onApply(result.updates); if(result.creates.length) onCreate(result.creates); onClose(); }} style={{ width:"100%", marginTop:14, border:"none", background:(result.updates.length||result.creates.length)?C.navy:"#E6E9F0", color:(result.updates.length||result.creates.length)?"#fff":"#A9B2C4", borderRadius:9, padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>Import {result.updates.length+result.creates.length} post{(result.updates.length+result.creates.length)===1?"":"s"}</button>
+              <button disabled={!result.updates.length && !result.creates.length} onClick={()=>{ onImport({ updates:result.updates, creates:result.creates }); onClose(); }} style={{ width:"100%", marginTop:14, border:"none", background:(result.updates.length||result.creates.length)?C.navy:"#E6E9F0", color:(result.updates.length||result.creates.length)?"#fff":"#A9B2C4", borderRadius:9, padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>Import {result.updates.length+result.creates.length} post{(result.updates.length+result.creates.length)===1?"":"s"}</button>
               <div style={{ fontSize:11, color:C.sub, marginTop:8 }}>New pieces come in as <b>Published</b> under <b>{result.brand}</b> with their publish date, duration, permalink, views &amp; follows.</div>
             </div>
           )}
@@ -932,7 +941,7 @@ function InsightOld({ rows, allRows, lists, onPatch, onCreate, onLink, followers
         {overDrawn.length>0 && <div style={{ fontSize:11.5, color:C.red, fontWeight:600, marginTop:9 }}>⚠ Content has earned more followers than the total keyed in for {overDrawn.join(", ")} — check that total is current.</div>}
         {staleAsOf.length>0 && <div style={{ fontSize:11, color:C.sub, marginTop:9 }}>Not updated in over 30 days: {staleAsOf.join(", ")}.</div>}
       </div>
-      {importing && <ImportModal pieces={rows||[]} lists={L} onApply={(l)=>l.forEach((m)=>onPatch(m.id, m.patch))} onCreate={onCreate} onClose={()=>setImporting(false)} />}
+      {importing && <ImportModal pieces={rows||[]} lists={L} onImport={(res)=>{ (res.updates||[]).forEach((m)=>onPatch(m.id, m.patch)); if(res.creates&&res.creates.length) onCreate(res.creates); }} onClose={()=>setImporting(false)} />}
       {/* only offer pieces that actually went out (Published), that didn't come from Meta, and that haven't already taken metrics from a link */}
       {linkRow && <LinkModal source={linkRow} candidates={(allRows||rows||[]).filter((r)=>r._id!==linkRow._id && !r.imported && !r.importedAt && r.status===ST.PUBLISHED)} onLink={(tid)=>{ onLink(linkRow._id, tid); setLinkRow(null); }} onClose={()=>setLinkRow(null)} />}
       {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
@@ -1066,7 +1075,7 @@ function LinkModal({ source, candidates, onLink, onClose }) {
   );
 }
 
-function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilter, setBrandFilter, query, setQuery }) {
+function Insight({ rows, allRows, lists, onPatch, onCreate, onImport, onConnect, brandFilter, setBrandFilter, query, setQuery }) {
   const L = lists || {};
   const [importing, setImporting] = useState(false);
   const [connectRow, setConnectRow] = useState(null);
@@ -1129,7 +1138,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onConnect, brandFilt
         {lastImport && <span style={{ fontSize:11, color:C.sub }}>Last imported <b style={{ color:C.ink }}>{fmtDateTime(lastImport)}</b></span>}
         <span style={{ fontSize:11.5, color:C.sub, fontWeight:600 }}>{list.length} post{list.length===1?"":"s"}</span>
       </div>
-      {importing && <ImportModal pieces={rows||[]} lists={L} onApply={(l)=>l.forEach((m)=>onPatch(m.id, m.patch))} onCreate={onCreate} onClose={()=>setImporting(false)} />}
+      {importing && <ImportModal pieces={rows||[]} lists={L} onImport={onImport} onClose={()=>setImporting(false)} />}
       {connectRow && <ConnectModal source={connectRow} candidates={connectable} connectedId={connectRow.connectedTo||""} onConnect={(tid)=>{ onConnect(connectRow._id, tid); setConnectRow(null); }} onClose={()=>setConnectRow(null)} />}
       {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
         <div style={{ ...card(0), overflow:"visible" }}>
