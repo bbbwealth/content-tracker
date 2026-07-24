@@ -1088,8 +1088,9 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onImport, onConnect,
   const n = (v)=>Number(v)||0;
   const fmt = (v)=>Number(v||0).toLocaleString();
   const team = (L.team||[]).filter((t)=>t!=="Unassigned");
-  // Insight only holds imported performance data (imported directly, or matched onto a piece)
-  const pub = (rows||[]).filter((r)=>r.importedAt);
+  // Insight shows ONLY posts that came in through a Meta import — never planned Content pieces
+  // (a planned piece an old import happened to stamp with importedAt must NOT appear here).
+  const pub = (rows||[]).filter((r)=>r.imported);
   const byId = {}; (allRows||[]).forEach((p)=>{ byId[p._id]=p; });
   const connectedPiece = (r)=> r.connectedTo ? byId[r.connectedTo] : null;
   const writerOf = (r)=>{ const c=connectedPiece(r); return c ? (c.scriptWriter||c.owner||c.by||"") : ""; };
