@@ -233,7 +233,7 @@ const syncCalendar = (calendar, item, status) => {
 };
 const calStatusForPipe = (it) => (it.status === ST.PUBLISHED || it.status === "Posted") ? "Posted" : (it.status === ST.SCHEDULED ? "Scheduled" : "Planned");
 const syncsToCal = (it) => !!(it.target || it.status === ST.SCHEDULED || it.status === ST.PUBLISHED);
-const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {}; d.editors = d.editors || []; d.retainers = d.retainers || []; if (!d.lists.collabPayStatus) d.lists.collabPayStatus = ["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"]; if (!d.lists.collabDealType) d.lists.collabDealType = ["One-off","Campaign","Retainer"];
+const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pipeline = (d.pipeline || []).map((p) => ({ ...p, stamps: p.stamps || {} })); d.lists = d.lists || {}; if (!d.lists.collabTypes) d.lists.collabTypes = ["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"]; d.weeklyPlans = (d.weeklyPlans || []).map((w) => ({ ...w, stamps: w.stamps || {} })); if (!d.lists.topics) d.lists.topics = ["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"]; if (!d.lists.contentStatus) d.lists.contentStatus = ["Idea","Scripted","Filmed","Edited","Published"]; if (d.settings.ideasTarget == null) d.settings.ideasTarget = 20; if (d.settings.ideaQuota == null) d.settings.ideaQuota = 25; if (d.settings.dailyPosts == null) d.settings.dailyPosts = 3; if (d.lists.ideaStatus && !d.lists.ideaStatus.includes("Scheduled")) d.lists.ideaStatus = ["Backlog","Approved","Scheduled","In Progress","Parked","Killed"]; d.accounts = d.accounts || []; if (!d.lists.ideaKind) d.lists.ideaKind = ["Organic","Collab"]; d.hiring = d.hiring || []; d.collabDecks = d.collabDecks || {}; d.incentive = d.incentive || {}; d.topicLinks = d.topicLinks || {}; d.memberPhones = d.memberPhones || {}; d.followers = d.followers || {}; d.payouts = d.payouts || {}; d.editors = d.editors || []; d.retainers = d.retainers || []; d.followerGrowth = d.followerGrowth || {}; if (!d.lists.collabPayStatus) d.lists.collabPayStatus = ["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"]; if (!d.lists.collabDealType) d.lists.collabDealType = ["One-off","Campaign","Retainer"];
   // ── one-time collab split: separate content status from payment status ──
   if (!d.settings.collabSplitV1) {
     d.lists.collabStatus = ["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"];
@@ -530,6 +530,7 @@ function App() {
   const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, brand:(L.brands[0]||""), dealType:"One-off", qty:1, perMonth:0, months:0, delivered:0, dcu:false, affiliate:false, feePerAccount:0, accountsDelivered:0, bonus:"", fee:"", status:"Pitching", payStatus:"Not Invoiced", start:"", end:"", pic:"", notes:"" }] }); };
   // account-level follower count per brand, keyed in by hand + stamped with the day it was read
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
+  const saveFollowerGrowth = (brand, patch) => persist({ ...data, followerGrowth: { ...(data.followerGrowth||{}), [brand]: { ...((data.followerGrowth||{})[brand]||{}), ...patch } } });
   const saveIncentive = (name, patch) => persist({ ...data, incentive: { ...(data.incentive||{}), [name]: { ...((data.incentive||{})[name]||{}), ...patch } } });
   const setStatus = (entity,_id,status) => persist({ ...data, [entity]:data[entity].map((r)=>(r._id===_id?{ ...r, status }:r)) });
   const setPipelineStatus = (_id, status) => { snapshotPipeline(); persist({ ...data, pipeline: data.pipeline.map((r)=>(r._id===_id ? withStamp(r, status) : r)) }); };
@@ -636,7 +637,7 @@ function App() {
           {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} />}
         {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
-          {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} />}
+          {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} growth={data.followerGrowth} onSaveGrowth={saveFollowerGrowth} brands={L.brands} />}
           {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
           {tab==="payout" && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
@@ -1371,7 +1372,107 @@ function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubm
   );
 }
 
-function Analytics({ rows, lists, followers, onSaveFollowers }) {
+/* ── follower growth: import Meta's daily "Follows" export (UTF-16 CSV), chart it, keep the export link ── */
+function FollowerGrowth({ brands, growth, onSave }) {
+  const list = brands || [];
+  const [brand, setBrand] = useState(list[0]||"");
+  const [mode, setMode] = useState("cumulative"); // cumulative | daily
+  const [hover, setHover] = useState(-1);
+  const G = growth || {};
+  const rec = G[brand] || {};
+  const [linkDraft, setLinkDraft] = useState(rec.link||"");
+  useEffect(()=>{ setLinkDraft((G[brand]||{}).link||""); }, [brand]);
+  const num = (v)=>Number(v)||0;
+  const fmt = (v)=>Number(v||0).toLocaleString();
+  const disp = (d)=>{ const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d)); return m?`${m[3]}/${m[2]}`:String(d); };
+  const importCsv = async (file) => {
+    if (!brand) { alert("Pick a brand first."); return; }
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let enc = "utf-8";
+      if (buf[0]===0xFF && buf[1]===0xFE) enc="utf-16le";
+      else if (buf[0]===0xFE && buf[1]===0xFF) enc="utf-16be";
+      const text = new TextDecoder(enc).decode(buf);
+      const out = [];
+      text.split(/\r?\n/).forEach((line)=>{ const m=/(\d{4}-\d{2}-\d{2})(?:[T ][^",]*)?"?\s*,\s*"?(-?[\d,]+)/.exec(line); if (m) out.push({ d:m[1], n:num(m[2].replace(/,/g,"")) }); });
+      if (!out.length) { alert("Couldn't find any date, follows rows. Export the Instagram 'Follows' chart from Meta and upload that CSV."); return; }
+      out.sort((a,b)=>a.d.localeCompare(b.d));
+      onSave(brand, { series:out, updatedAt:localDateTime() });
+    } catch (e) { alert("Sorry, couldn't read that file."); }
+  };
+  const daily = (rec.series||[]).slice().sort((a,b)=>String(a.d).localeCompare(String(b.d))).map((s)=>({ d:s.d, n:num(s.n) }));
+  let run=0; const cumulative = daily.map((s)=>({ d:s.d, n:(run+=s.n) }));
+  const chartData = mode==="cumulative" ? cumulative : daily;
+  const total = daily.reduce((s,x)=>s+x.n,0);
+  const best = daily.reduce((m,x)=>x.n>m.n?x:m, {n:-1,d:""});
+  const kpi = (v,l,c)=>(<div style={{ ...card(12), flex:1, minWidth:120 }}><div style={{ fontSize:22, fontWeight:600, lineHeight:1, color:c||C.ink }}>{v}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600, marginTop:6 }}>{l}</div></div>);
+  const W=760, H=260, padL=44, padR=14, padT=16, padB=40, iW=W-padL-padR, iH=H-padT-padB;
+  const max=Math.max(1, ...chartData.map((x)=>x.n));
+  const x=(i)=> padL + (chartData.length<=1 ? iW/2 : (i/(chartData.length-1))*iW);
+  const bx=(i)=> padL + (i*iW/Math.max(1,chartData.length));
+  const y=(v)=> padT + iH - (v/max)*iH;
+  const labelIdx = chartData.length>10 ? Math.ceil(chartData.length/6) : 1;
+  const linePath = chartData.map((p,i)=>`${i===0?"M":"L"}${x(i).toFixed(1)},${y(p.n).toFixed(1)}`).join(" ");
+  const areaPath = chartData.length ? `${linePath} L${x(chartData.length-1).toFixed(1)},${(padT+iH).toFixed(1)} L${x(0).toFixed(1)},${(padT+iH).toFixed(1)} Z` : "";
+  return (
+    <div style={card(16)}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <SectionTitle icon={TrendingUp}>Follower growth</SectionTitle>
+        <div style={{ flex:1 }} />
+        {list.map((b)=>(<button key={b} type="button" onClick={()=>setBrand(b)} style={{ display:"flex", alignItems:"center", gap:6, border:`1.5px solid ${brand===b?C.navy:C.line}`, background:brand===b?"#F3F6FC":"#fff", color:brand===b?C.navy:C.sub, borderRadius:8, padding:"5px 10px", fontSize:12, fontWeight:700, cursor:"pointer" }}><span style={{ width:8, height:8, borderRadius:3, background:BRAND_DOT[b]||C.sub }} />{b}</button>))}
+      </div>
+      <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Import the Instagram <b>Follows</b> chart export from Meta (daily follows gained). Paste your export link so you can jump straight there next time.</div>
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}>
+        <label style={{ fontSize:12, fontWeight:700, color:"#fff", background:C.navy, borderRadius:8, padding:"8px 12px", cursor:"pointer", display:"inline-flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>⬆ Import follows CSV<input type="file" accept=".csv,text/csv" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; if(f) importCsv(f); if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label>
+        <input value={linkDraft} onChange={(e)=>setLinkDraft(e.target.value)} onBlur={()=>onSave(brand,{link:linkDraft.trim()})} onKeyDown={(e)=>{ if(e.key==="Enter"){ onSave(brand,{link:linkDraft.trim()}); e.target.blur(); } }} placeholder="Paste Meta export URL for this brand…" style={{ flex:1, minWidth:180, border:`1px solid ${C.line}`, borderRadius:8, padding:"8px 10px", fontSize:12, fontFamily:"inherit", boxSizing:"border-box" }} />
+        {rec.link ? <a href={rec.link} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, fontWeight:700, color:"#fff", background:BLUE.accent, borderRadius:8, padding:"8px 12px", textDecoration:"none", whiteSpace:"nowrap" }}>Open Meta ↗</a> : <span style={{ fontSize:11, color:C.sub }}>add a link to enable ↗</span>}
+      </div>
+      {daily.length===0 ? <Empty>No follower data for {brand||"this brand"} yet — import the Follows CSV above.</Empty> : (
+        <div>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+            {kpi("+"+fmt(total), "Total gained ("+disp(daily[0].d)+"–"+disp(daily[daily.length-1].d)+")", "#15724A")}
+            {kpi("+"+fmt(best.n), "Best day ("+disp(best.d)+")", BLUE.accent)}
+            {kpi(fmt(daily.length), "Days tracked")}
+          </div>
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:6 }}>
+            {[["cumulative","Cumulative"],["daily","Daily"]].map((o)=>(<button key={o[0]} onClick={()=>setMode(o[0])} style={{ border:"none", cursor:"pointer", borderRadius:7, padding:"5px 12px", fontSize:11.5, fontWeight:700, background:mode===o[0]?C.navy:"#EEF1F6", color:mode===o[0]?"#fff":C.sub }}>{o[1]}</button>))}
+          </div>
+          <div style={{ border:`1px solid ${C.line}`, borderRadius:10, padding:"8px 4px", overflowX:"auto" }}>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{ width:"100%", minWidth:520, display:"block" }} preserveAspectRatio="xMidYMid meet" onMouseLeave={()=>setHover(-1)}>
+              {[0,0.5,1].map((f)=>{ const gv=Math.round(max*f); const gy=y(gv); return (<g key={f}><line x1={padL} y1={gy} x2={W-padR} y2={gy} stroke={C.line} strokeWidth="1" /><text x={padL-6} y={gy+3} textAnchor="end" fontSize="9" fill={C.sub}>{fmt(gv)}</text></g>); })}
+              {mode==="daily"
+                ? chartData.map((p,i)=>{ const bw=Math.max(2,(iW/chartData.length)*0.66); const cx=bx(i)+(iW/chartData.length-bw)/2; return <rect key={i} x={cx} y={y(p.n)} width={bw} height={(padT+iH)-y(p.n)} fill={hover===i?C.navy:BLUE.accent} rx="1.5" />; })
+                : (<g><path d={areaPath} fill={BLUE.accent} opacity="0.12" /><path d={linePath} fill="none" stroke={BLUE.accent} strokeWidth="2" />{chartData.map((p,i)=>(<circle key={i} cx={x(i)} cy={y(p.n)} r={hover===i?4:2.5} fill={BLUE.accent} />))}</g>)
+              }
+              {chartData.map((p,i)=> (i%labelIdx===0 || i===chartData.length-1) ? <text key={"x"+i} x={mode==="daily"?bx(i)+(iW/chartData.length)/2:x(i)} y={H-padB+16} textAnchor="middle" fontSize="9" fill={C.sub}>{disp(p.d)}</text> : null)}
+              {/* invisible hover bands — one per date */}
+              {chartData.map((p,i)=>{ const w=iW/Math.max(1,chartData.length); const hxo=mode==="daily"?bx(i):Math.max(padL, x(i)-w/2); return <rect key={"hb"+i} x={hxo} y={padT} width={w} height={iH} fill="transparent" onMouseEnter={()=>setHover(i)} onMouseMove={()=>setHover(i)} />; })}
+              {/* tooltip — always shows the DAILY gain for the pointed date */}
+              {hover>=0 && hover<chartData.length && (()=>{
+                const cx = mode==="daily" ? bx(hover)+(iW/chartData.length)/2 : x(hover);
+                const cy = y(chartData[hover].n);
+                const dn = daily[hover].n, cn = cumulative[hover].n;
+                const lines = [ disp(daily[hover].d), "+"+fmt(dn)+" that day", fmt(cn)+" total" ];
+                const bw = 108, bh = 14+lines.length*13;
+                let bxo = cx+10; if (bxo+bw > W-padR) bxo = cx-10-bw; if (bxo < padL) bxo = padL;
+                let byo = cy-bh-8; if (byo < padT) byo = cy+10;
+                return (<g pointerEvents="none">
+                  <line x1={cx} y1={padT} x2={cx} y2={padT+iH} stroke={C.sub} strokeWidth="1" strokeDasharray="3 3" opacity="0.55" />
+                  {mode==="cumulative" && <circle cx={cx} cy={cy} r="4" fill={BLUE.accent} stroke="#fff" strokeWidth="1.5" />}
+                  <rect x={bxo} y={byo} width={bw} height={bh} rx="6" fill={C.navy} opacity="0.97" />
+                  {lines.map((ln,li)=>(<text key={li} x={bxo+9} y={byo+15+li*13} fontSize={li===0?10:11} fontWeight={li===1?800:600} fill={li===0?"#9FB0CC":li===1?"#8FD3AC":"#CBD5E6"}>{ln}</text>))}
+                </g>);
+              })()}
+            </svg>
+          </div>
+          {rec.updatedAt && <div style={{ fontSize:10.5, color:C.sub, marginTop:8 }}>Last imported {rec.updatedAt}.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrowth, brands }) {
   const L = lists || {};
   const P = rows || [];
   const FOL = followers || {};
@@ -1504,6 +1605,8 @@ function Analytics({ rows, lists, followers, onSaveFollowers }) {
           </tbody>
         </table>
       </div>
+
+      <FollowerGrowth brands={brands||L.brands} growth={growth} onSave={onSaveGrowth} />
 
       <div style={card(16)}>
         <SectionTitle icon={TrendingUp}>Performance by topic</SectionTitle>
