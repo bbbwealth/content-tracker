@@ -1142,7 +1142,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onImport, onConnect,
         <span style={{ fontSize:11.5, color:C.sub, fontWeight:600 }}>{list.length} post{list.length===1?"":"s"}</span>
       </div>
       {importing && <ImportModal pieces={rows||[]} lists={L} onImport={onImport} onClose={()=>setImporting(false)} />}
-      {connectRow && <ConnectModal source={connectRow} candidates={connectable} connectedId={connectRow.connectedTo||""} onConnect={(tid)=>{ onConnect(connectRow._id, tid); setConnectRow(null); }} onClose={()=>setConnectRow(null)} />}
+      {connectRow && (()=>{ const usedByOthers = new Set(pub.filter((r)=>r.connectedTo && r._id!==connectRow._id).map((r)=>r.connectedTo)); const cand = connectable.filter((c)=>!usedByOthers.has(c._id)); return <ConnectModal source={connectRow} candidates={cand} connectedId={connectRow.connectedTo||""} onConnect={(tid)=>{ onConnect(connectRow._id, tid); setConnectRow(null); }} onClose={()=>setConnectRow(null)} />; })()}
       {pub.length===0 ? <Empty>No performance data yet. Use “Import from Meta” to pull in your published posts — Insight only shows imported data.</Empty> : (
         <div style={{ ...card(0), overflow:"visible" }}>
           <div style={{ overflow:"visible" }}>
