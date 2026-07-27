@@ -101,11 +101,11 @@ const COLLAB_TYPE = {
 };
 /* ── unified content stages (Idea Bank + Pipeline merged into one board) ── */
 // named so re-ordering stages can never break the logic
-const ST = { IDEA:"Idea", SCRIPTED:"Scripted", FILMED:"Filmed", EDITED:"Edited", SCHEDULED:"Scheduled", PUBLISHED:"Published", HOLD:"On Hold" };
-const STAGES = [ST.IDEA, ST.SCRIPTED, ST.FILMED, ST.EDITED, ST.SCHEDULED, ST.PUBLISHED, ST.HOLD];
-// one clearly distinct hue per stage — grey → blue → purple → amber → cyan → green, red for hold
-const STAGE_TINT = { [ST.IDEA]:"#ECEEF2", [ST.SCRIPTED]:"#D2E4FD", [ST.FILMED]:"#E3D6FB", [ST.EDITED]:"#FDE4BF", [ST.SCHEDULED]:"#B6E7F4", [ST.PUBLISHED]:"#CDEBD4", [ST.HOLD]:"#FBD0D0" };
-const STAGE_INK  = { [ST.IDEA]:"#55617A", [ST.SCRIPTED]:"#1B4F9C", [ST.FILMED]:"#4B2E9E", [ST.EDITED]:"#8A5212", [ST.SCHEDULED]:"#0E5C72", [ST.PUBLISHED]:"#146B45", [ST.HOLD]:"#A11B1B" };
+const ST = { IDEA:"Idea", SCRIPTED:"Scripted", READY:"Ready for Film", FILMED:"Filmed", EDITED:"Edited", SCHEDULED:"Scheduled", PUBLISHED:"Published", HOLD:"On Hold" };
+const STAGES = [ST.IDEA, ST.SCRIPTED, ST.READY, ST.FILMED, ST.EDITED, ST.SCHEDULED, ST.PUBLISHED, ST.HOLD];
+// one clearly distinct hue per stage — grey → blue → indigo → purple → amber → cyan → green, red for hold
+const STAGE_TINT = { [ST.IDEA]:"#ECEEF2", [ST.SCRIPTED]:"#D2E4FD", [ST.READY]:"#E0E0FC", [ST.FILMED]:"#E3D6FB", [ST.EDITED]:"#FDE4BF", [ST.SCHEDULED]:"#B6E7F4", [ST.PUBLISHED]:"#CDEBD4", [ST.HOLD]:"#FBD0D0" };
+const STAGE_INK  = { [ST.IDEA]:"#55617A", [ST.SCRIPTED]:"#1B4F9C", [ST.READY]:"#4338CA", [ST.FILMED]:"#4B2E9E", [ST.EDITED]:"#8A5212", [ST.SCHEDULED]:"#0E5C72", [ST.PUBLISHED]:"#146B45", [ST.HOLD]:"#A11B1B" };
 const TOPICS = ["Credit Card","Saving Platform","Digital Banks","Bank FD","Business","Market","Subsidy","AI","Complains"];
 // maps every legacy idea/pipeline status onto the merged stages
 const LEGACY_STAGE = { "Backlog":ST.IDEA, "Approved":ST.IDEA, "Scripting":ST.SCRIPTED, "In Progress":ST.SCRIPTED, "Footage Ready":ST.FILMED, "Design":ST.FILMED, "Review":ST.EDITED, "Posted":ST.PUBLISHED, "Parked":ST.HOLD, "Killed":ST.HOLD };
@@ -293,6 +293,17 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
     d.settings.mergedV1 = true;
   }
   if (!d.lists.pipelineStatus || !d.lists.pipelineStatus.length) d.lists.pipelineStatus = STAGES.slice();
+  // one-time: insert the "Ready for Film" stage (between Scripted and Filmed) into existing boards
+  if (!d.settings.readyForFilmV1) {
+    const ps = d.lists.pipelineStatus.slice();
+    if (!ps.includes(ST.READY)) {
+      const at = ps.indexOf(ST.SCRIPTED);
+      if (at >= 0) ps.splice(at + 1, 0, ST.READY);
+      else { const f = ps.indexOf(ST.FILMED); ps.splice(f >= 0 ? f : ps.length, 0, ST.READY); }
+      d.lists.pipelineStatus = ps;
+    }
+    d.settings.readyForFilmV1 = true;
+  }
   return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
@@ -1492,7 +1503,7 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
   const byId = {}; P.forEach((p)=>{ byId[p._id]=p; });
   const n = (v)=>Number(v)||0;
   const fmt = (v)=>Number(v||0).toLocaleString();
-  const stages = [ST.IDEA, ST.SCRIPTED, ST.FILMED, ST.EDITED, ST.PUBLISHED];
+  const stages = [ST.IDEA, ST.SCRIPTED, ST.READY, ST.FILMED, ST.EDITED, ST.PUBLISHED];
   const monthName = (ym)=>{ const m=/^(\d{4})-(\d{2})$/.exec(ym); if(!m) return ym; return ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][Number(m[2])-1]+" "+m[1]; };
 
   // ── performance: imported posts, attributed via their connected content piece ──
