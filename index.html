@@ -1388,7 +1388,7 @@ function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubm
 /* ── follower growth: import Meta's daily "Follows" export (UTF-16 CSV), chart it, keep the export link ── */
 function FollowerGrowth({ brands, growth, onSave }) {
   const list = brands || [];
-  const [brand, setBrand] = useState(list[0]||"");
+  const [brand, setBrand] = useState(list.includes("Madeleine Learns") ? "Madeleine Learns" : (list[0]||""));
   const [mode, setMode] = useState("cumulative"); // cumulative | daily
   const [hover, setHover] = useState(-1);
   const G = growth || {};
@@ -1526,19 +1526,26 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
   const writerRows = stageMatrix("scriptWriter");
   const editorRows = stageMatrix("editor");
 
+  const [topicSort, setTopicSort] = useState({ k:"follows", d:-1 });
+  const [writerSort, setWriterSort] = useState({ k:"follows", d:-1 });
+  const [wStageSort, setWStageSort] = useState({ k:"pieces", d:-1 });
+  const [eStageSort, setEStageSort] = useState({ k:"pieces", d:-1 });
+  const sArrow = (active,d)=><span style={{ opacity:active?1:.4, marginLeft:3, fontSize:9 }}>{active?(d===1?"▲":"▼"):"↕"}</span>;
   const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"9px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
   const numTd = { textAlign:"right", fontSize:12, padding:"7px 8px", whiteSpace:"nowrap", borderBottom:`1px solid ${C.line}` };
-  const perfTable = (label) => (data) => (
+  const perfTable = (label, data, sort, setSort) => {
+    const cols = [[label,"k","left"],["Posts","posts","right"],["Total follows","follows","right"],["Avg follows","avgF","right"],["Total views","views","right"],["Avg views","avgV","right"]];
+    const toggle = (k)=> setSort(sort.k===k ? { k, d:-sort.d } : { k, d:k==="k"?1:-1 });
+    const rows = data.slice().sort((a,b)=>{ const x=a[sort.k], y=b[sort.k]; if(typeof x==="number"&&typeof y==="number") return (x-y)*sort.d; return String(x==null?"":x).localeCompare(String(y==null?"":y))*sort.d; });
+    return (
     <div style={{ overflowX:"auto" }}>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:520 }}>
         <thead><tr style={{ background:BLUE.head }}>
-          <th style={th}>{label}</th><th style={{ ...th, textAlign:"right" }}>Posts</th>
-          <th style={{ ...th, textAlign:"right" }}>Total follows</th><th style={{ ...th, textAlign:"right" }}>Avg follows</th>
-          <th style={{ ...th, textAlign:"right" }}>Total views</th><th style={{ ...th, textAlign:"right" }}>Avg views</th>
+          {cols.map(([lab,k,al])=><th key={k} onClick={()=>toggle(k)} style={{ ...th, textAlign:al, cursor:"pointer", userSelect:"none" }}>{lab}{sArrow(sort.k===k, sort.d)}</th>)}
         </tr></thead>
         <tbody>
-          {data.length===0 && <tr><td colSpan={6} style={{ padding:0 }}><Empty>Connect imported posts to content pieces (Insight → ＋) so they pick up a {label.toLowerCase()}.</Empty></td></tr>}
-          {data.map((x,i)=>(
+          {rows.length===0 && <tr><td colSpan={6} style={{ padding:0 }}><Empty>Connect imported posts to content pieces (Insight → ＋) so they pick up a {label.toLowerCase()}.</Empty></td></tr>}
+          {rows.map((x,i)=>(
             <tr key={x.k} style={{ background:i%2?"#F5F7FB":"#fff" }}>
               <td style={{ fontSize:12, fontWeight:600, padding:"7px 8px", borderBottom:`1px solid ${C.line}` }}>{x.k}</td>
               <td style={numTd}>{x.posts}</td>
@@ -1551,18 +1558,23 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
         </tbody>
       </table>
     </div>
-  );
-  const matrixTable = (label) => (dataRows) => (
+    );
+  };
+  const matrixTable = (label, dataRows, sort, setSort) => {
+    const mval = (row,k)=>{ if(k==="who") return (row.who||"").toLowerCase(); if(k==="pieces") return row.pieces.size; if(k.indexOf("st:")===0){ const s=k.slice(3); return row.total[s]||0; } return 0; };
+    const toggle = (k)=> setSort(sort.k===k ? { k, d:-sort.d } : { k, d:k==="who"?1:-1 });
+    const rows = dataRows.slice().sort((a,b)=>{ const x=mval(a,sort.k), y=mval(b,sort.k); if(typeof x==="number"&&typeof y==="number") return (x-y)*sort.d; return String(x).localeCompare(String(y))*sort.d; });
+    return (
     <div style={{ overflowX:"auto" }}>
       <table style={{ width:"100%", borderCollapse:"collapse", minWidth:640 }}>
         <thead><tr style={{ background:BLUE.head }}>
-          <th style={th}>{label}</th>
-          {stages.map((s)=><th key={s} style={{ ...th, textAlign:"center" }}>{s}</th>)}
-          <th style={{ ...th, textAlign:"center" }}>Pieces</th>
+          <th onClick={()=>toggle("who")} style={{ ...th, cursor:"pointer", userSelect:"none" }}>{label}{sArrow(sort.k==="who", sort.d)}</th>
+          {stages.map((s)=><th key={s} onClick={()=>toggle("st:"+s)} style={{ ...th, textAlign:"center", cursor:"pointer", userSelect:"none" }}>{s}{sArrow(sort.k==="st:"+s, sort.d)}</th>)}
+          <th onClick={()=>toggle("pieces")} style={{ ...th, textAlign:"center", cursor:"pointer", userSelect:"none" }}>Pieces{sArrow(sort.k==="pieces", sort.d)}</th>
         </tr></thead>
         <tbody>
-          {dataRows.length===0 && <tr><td colSpan={stages.length+2} style={{ padding:0 }}><Empty>No content assigned to a {label.toLowerCase()} yet.</Empty></td></tr>}
-          {dataRows.map((row,i)=>(
+          {rows.length===0 && <tr><td colSpan={stages.length+2} style={{ padding:0 }}><Empty>No content assigned to a {label.toLowerCase()} yet.</Empty></td></tr>}
+          {rows.map((row,i)=>(
             <tr key={row.who} style={{ background:i%2?"#F5F7FB":"#fff" }}>
               <td style={{ fontSize:12, fontWeight:600, padding:"7px 8px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap" }}>{row.who}</td>
               {stages.map((s)=>(
@@ -1577,7 +1589,8 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
         </tbody>
       </table>
     </div>
-  );
+    );
+  };
 
   const totF = connectedPosts.reduce((s,r)=>s+n(r.follows),0);
   const totV = connectedPosts.reduce((s,r)=>s+n(r.views),0);
@@ -1624,12 +1637,12 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
       <div style={card(16)}>
         <SectionTitle icon={TrendingUp}>Performance by topic</SectionTitle>
         <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Follows &amp; views of connected posts, grouped by the connected piece's topic.</div>
-        {perfTable("Topic")(byTopic)}
+        {perfTable("Topic", byTopic, topicSort, setTopicSort)}
       </div>
       <div style={card(16)}>
         <SectionTitle icon={TrendingUp}>Performance by writer</SectionTitle>
         <div style={{ fontSize:11, color:C.sub, margin:"5px 0 12px" }}>Same, grouped by the connected piece's writer.</div>
-        {perfTable("Writer")(byWriter)}
+        {perfTable("Writer", byWriter, writerSort, setWriterSort)}
       </div>
 
       <div style={{ ...card(16) }}>
@@ -1643,9 +1656,9 @@ function Analytics({ rows, lists, followers, onSaveFollowers, growth, onSaveGrow
         </div>
         <div style={{ fontSize:11, color:C.sub, marginBottom:12 }}>Each cell: <b>{monthName(ym)}</b> count <span style={{ color:C.sub }}>/ all-time total</span>. Counts how many pieces reached each stage.</div>
         <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, margin:"4px 0 6px", textTransform:"uppercase", letterSpacing:".3px" }}>By writer</div>
-        {matrixTable("Writer")(writerRows)}
+        {matrixTable("Writer", writerRows, wStageSort, setWStageSort)}
         <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, margin:"16px 0 6px", textTransform:"uppercase", letterSpacing:".3px" }}>By editor</div>
-        {matrixTable("Editor")(editorRows)}
+        {matrixTable("Editor", editorRows, eStageSort, setEStageSort)}
       </div>
     </div>
   );
