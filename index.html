@@ -101,11 +101,11 @@ const COLLAB_TYPE = {
 };
 /* ── unified content stages (Idea Bank + Pipeline merged into one board) ── */
 // named so re-ordering stages can never break the logic
-const ST = { IDEA:"Idea", SCRIPTED:"Scripted", READY:"Ready for Film", FILMED:"Filmed", EDITED:"Edited", SCHEDULED:"Scheduled", PUBLISHED:"Published", HOLD:"On Hold" };
+const ST = { IDEA:"Idea", SCRIPTED:"Scripted", READY:"Ready to Film", FILMED:"Filmed", EDITED:"Edited", SCHEDULED:"Scheduled", PUBLISHED:"Published", HOLD:"On Hold" };
 const STAGES = [ST.IDEA, ST.SCRIPTED, ST.READY, ST.FILMED, ST.EDITED, ST.SCHEDULED, ST.PUBLISHED, ST.HOLD];
-// one clearly distinct hue per stage — grey → blue → indigo → purple → amber → cyan → green, red for hold
-const STAGE_TINT = { [ST.IDEA]:"#ECEEF2", [ST.SCRIPTED]:"#D2E4FD", [ST.READY]:"#E0E0FC", [ST.FILMED]:"#E3D6FB", [ST.EDITED]:"#FDE4BF", [ST.SCHEDULED]:"#B6E7F4", [ST.PUBLISHED]:"#CDEBD4", [ST.HOLD]:"#FBD0D0" };
-const STAGE_INK  = { [ST.IDEA]:"#55617A", [ST.SCRIPTED]:"#1B4F9C", [ST.READY]:"#4338CA", [ST.FILMED]:"#4B2E9E", [ST.EDITED]:"#8A5212", [ST.SCHEDULED]:"#0E5C72", [ST.PUBLISHED]:"#146B45", [ST.HOLD]:"#A11B1B" };
+// one clearly distinct hue per stage — grey → blue → red → purple → amber → cyan → green, red for hold
+const STAGE_TINT = { [ST.IDEA]:"#ECEEF2", [ST.SCRIPTED]:"#D2E4FD", [ST.READY]:"#FBD5CF", [ST.FILMED]:"#E3D6FB", [ST.EDITED]:"#FDE4BF", [ST.SCHEDULED]:"#B6E7F4", [ST.PUBLISHED]:"#CDEBD4", [ST.HOLD]:"#FBD0D0" };
+const STAGE_INK  = { [ST.IDEA]:"#55617A", [ST.SCRIPTED]:"#1B4F9C", [ST.READY]:"#C0271F", [ST.FILMED]:"#4B2E9E", [ST.EDITED]:"#8A5212", [ST.SCHEDULED]:"#0E5C72", [ST.PUBLISHED]:"#146B45", [ST.HOLD]:"#A11B1B" };
 const TOPICS = ["Credit Card","Saving Platform","Digital Banks","Bank FD","Business","Market","Subsidy","AI","Complains"];
 // maps every legacy idea/pipeline status onto the merged stages
 const LEGACY_STAGE = { "Backlog":ST.IDEA, "Approved":ST.IDEA, "Scripting":ST.SCRIPTED, "In Progress":ST.SCRIPTED, "Footage Ready":ST.FILMED, "Design":ST.FILMED, "Review":ST.EDITED, "Posted":ST.PUBLISHED, "Parked":ST.HOLD, "Killed":ST.HOLD };
@@ -304,6 +304,20 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
     }
     d.settings.readyForFilmV1 = true;
   }
+  // one-time: rename the earlier "Ready for Film" label to "Ready to Film" across board list, statuses & stamps
+  if (!d.settings.readyToFilmV2) {
+    const OLD = "Ready for Film";
+    d.lists.pipelineStatus = (d.lists.pipelineStatus || []).map((s)=> s===OLD ? ST.READY : s);
+    if (!d.lists.pipelineStatus.includes(ST.READY)) {
+      const at = d.lists.pipelineStatus.indexOf(ST.SCRIPTED);
+      d.lists.pipelineStatus.splice(at >= 0 ? at + 1 : d.lists.pipelineStatus.length, 0, ST.READY);
+    }
+    (d.pipeline || []).forEach((r)=>{
+      if (r.status === OLD) r.status = ST.READY;
+      if (r.stamps && r.stamps[OLD] !== undefined) { r.stamps[ST.READY] = r.stamps[OLD]; delete r.stamps[OLD]; }
+    });
+    d.settings.readyToFilmV2 = true;
+  }
   return d; };
 const stampContent = (item) => { const s = { ...(item.stamps || {}) }; if (item.status && item.status !== "Idea" && !s[item.status]) s[item.status] = nowISO(); return { ...item, stamps: s }; };
 function Toolbar({ title, sub, onAdd, addLabel, onSecondary, secondaryLabel, secondaryIcon:SecIcon }) {
@@ -459,7 +473,7 @@ function App() {
   const editorEmails = (data.editors || []).map((e)=>String(e||"").toLowerCase());
   const isEditor = !isAdmin && (role === "editor" || editorEmails.includes(String(currentUser.email||"").toLowerCase()));
   const myName = (currentUser.user_metadata && currentUser.user_metadata.name) || currentUser.email || "";
-  const L = data.lists;
+  const L = { ...data.lists, topics: [ ...((data.lists && data.lists.topics) || []) ].sort((a,b)=>String(a).localeCompare(String(b))) };
   const matchBrand = (r) => brandFilter === "All" || r.brand === brandFilter;
   const matchQuery = (r) => !query || JSON.stringify(r).toLowerCase().includes(query.toLowerCase());
   const filt = (rows) => rows.filter((r) => matchBrand(r) && matchQuery(r));
@@ -551,7 +565,7 @@ function App() {
   // editor payouts: rate + payee details, and submitted invoices
   const savePayout = (name, patch) => persist({ ...data, payouts: { ...(data.payouts||{}), [name]: { ...((data.payouts||{})[name]||{}), ...patch } } });
   const submitInvoice = (name, invoice) => { const cur=(data.payouts||{})[name]||{}; persist({ ...data, payouts:{ ...(data.payouts||{}), [name]:{ ...cur, invoices:[...(cur.invoices||[]), invoice] } } }); };
-  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, brand:(L.brands[0]||""), dealType:"Campaign", desc:"", qty:1, perMonth:3, months:6, delivered:0, dcu:false, affiliate:false, feePerAccount:0, accountsDelivered:0, bonus:"", fee:"", status:"Pitching", payStatus:"Not Invoiced", start:"", end:"", pic:"", notes:"" }] }); };
+  const quickAddCollab = (partner) => { const t=(partner||"").trim(); if(!t) return; persist({ ...data, collabs:[...data.collabs, { _id:uid(), code:nextCode(data.collabs,"K"), partner:t, brand:(L.brands[0]||""), dealType:"Campaign", desc:"", qty:1, perMonth:3, months:6, delivered:0, dcu:false, affiliate:false, feePerAccount:0, accountsDelivered:0, bonus:"", fee:"", status:"Pitching", payStatus:"Not Invoiced", dateAdded:nowISO(), start:"", end:"", pic:"", notes:"" }] }); };
   // account-level follower count per brand, keyed in by hand + stamped with the day it was read
   const saveFollowers = (brand, patch) => persist({ ...data, followers: { ...(data.followers||{}), [brand]: { ...((data.followers||{})[brand]||{}), ...patch } } });
   const saveFollowerGrowth = (brand, patch) => persist({ ...data, followerGrowth: { ...(data.followerGrowth||{}), [brand]: { ...((data.followerGrowth||{})[brand]||{}), ...patch } } });
@@ -599,9 +613,19 @@ function App() {
   };
   const listMembers = () => callAdminFn({ action:"list" });
   const removeMember = (id) => callAdminFn({ action:"delete", id });
-  const updateMember = async ({ id, email, role, tabs, contentRoles, employment }) => {
-    const out = await callAdminFn({ action:"update", id, role, tabs, contentRoles, employment });
-    persist(setEditorFlag(data, email, role==="editor"));
+  const updateMember = async ({ id, email, role, tabs, contentRoles, employment, name, oldName }) => {
+    const nm = String(name||"").trim();
+    const out = await callAdminFn({ action:"update", id, role, tabs, contentRoles, employment, ...(nm ? { name: nm } : {}) });
+    let next = setEditorFlag(data, email, role==="editor");
+    // keep the Owner/Team dropdown list in sync with the renamed member
+    if (nm) {
+      const prev = String(oldName||"").trim();
+      let team = next.lists.team.slice();
+      if (prev && prev !== nm) team = team.map((t)=> t===prev ? nm : t);
+      if (!team.includes(nm)) team.push(nm);
+      next = { ...next, lists:{ ...next.lists, team } };
+    }
+    persist(next);
     return out;
   };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
@@ -611,9 +635,13 @@ function App() {
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
-  // editors get a locked-down nav: only their Content (edit queue) and Payout
-  const visibleNav = isEditor ? NAV.filter((n)=>n.id==="pipeline" || n.id==="payout")
+  const myEmployment = (currentUser.user_metadata && currentUser.user_metadata.employment) || (currentUser.app_metadata && currentUser.app_metadata.employment) || "";
+  const isPartTime = String(myEmployment).toLowerCase() === "part time";
+  // editors get a locked-down nav: Content always; Payout only for part-time editors
+  const visibleNav = isEditor ? NAV.filter((n)=>n.id==="pipeline" || (n.id==="payout" && isPartTime))
     : (!isAdmin && Array.isArray(allowedTabs)) ? NAV.filter((n)=>n.id==="pipeline" || allowedTabs.includes(n.id)) : NAV;
+  // editors are confined to Content (+ Payout only if part-time) — never allow the active tab to drift elsewhere
+  useEffect(()=>{ if (isEditor && tab!=="pipeline" && !(tab==="payout" && isPartTime)) setTab("pipeline"); }, [isEditor, tab, isPartTime]);
 
   const pageTitle = (NAV.find((n)=>n.id===tab) || {}).label || "Dashboard";
 
@@ -663,7 +691,7 @@ function App() {
           {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
           {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} growth={data.followerGrowth} onSaveGrowth={saveFollowerGrowth} brands={L.brands} />}
           {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
-          {tab==="payout" && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
+          {tab==="payout" && !(isEditor && !isPartTime) && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
           {tab==="settings" && <Lists data={data} persist={persist} />}
           {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
         </div>
@@ -1795,6 +1823,9 @@ function DateCell({ value, onCommit, style, ...rest }) {
 // never on hover — so dragging across cells to select a range doesn't pop dropdowns open.
 function HoverSelect({ value, options, onChange, placeholder, allLabel, allValue, style, wrapStyle, ...rest }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const trigRef = React.useRef(null);
+  const openMenu = ()=>{ const el=trigRef.current; if(el){ const r=el.getBoundingClientRect(); setPos({ top:r.bottom+2, left:r.left, width:r.width }); } setOpen(true); };
   const opts = (options||[]).map((o)=>(o && typeof o==="object") ? { v:o.v, l:o.l } : { v:o, l:String(o) });
   const clearV = allValue !== undefined ? allValue : "";
   const cur = opts.find((o)=>o.v===value);
@@ -1802,7 +1833,7 @@ function HoverSelect({ value, options, onChange, placeholder, allLabel, allValue
   const vals = opts.map((o)=>o.v);
   const step = (dir)=>{ const i = vals.indexOf(value); const ni = dir>0 ? Math.min(vals.length-1, i+1) : Math.max(0, i-1); if (vals[ni] !== undefined) onChange(vals[ni]); };
   const onKey = (e)=>{
-    if (e.altKey && (e.key==="ArrowDown" || e.key==="ArrowUp")) { e.preventDefault(); e.stopPropagation(); setOpen((o)=>!o); return; } // Alt+Down opens, like Excel validation
+    if (e.altKey && (e.key==="ArrowDown" || e.key==="ArrowUp")) { e.preventDefault(); e.stopPropagation(); open?setOpen(false):openMenu(); return; } // Alt+Down opens, like Excel validation
     if (e.key==="ArrowDown" || e.key==="ArrowUp") {
       if (open) { e.preventDefault(); e.stopPropagation(); step(e.key==="ArrowDown" ? 1 : -1); } // OPEN: step through options
       // CLOSED: do nothing here — let the arrow bubble so the grid moves between rows
@@ -1813,14 +1844,15 @@ function HoverSelect({ value, options, onChange, placeholder, allLabel, allValue
     else if (e.key==="Backspace" || e.key==="Delete") { e.preventDefault(); onChange(clearV); }
     else if (e.key.length===1 && !e.ctrlKey && !e.metaKey) { const f = opts.find((o)=>o.l.toLowerCase().startsWith(e.key.toLowerCase())); if (f) onChange(f.v); }
   };
+  useEffect(()=>{ if(!open) return; const close=()=>setOpen(false); window.addEventListener("scroll",close,true); window.addEventListener("resize",close); return ()=>{ window.removeEventListener("scroll",close,true); window.removeEventListener("resize",close); }; },[open]);
   return (
     <div style={{ position:"relative", ...wrapStyle }}>
-      <div {...rest} data-select="1" tabIndex={0} onClick={(e)=>{ e.stopPropagation(); setOpen((o)=>!o); }} onBlur={()=>setOpen(false)} onKeyDown={onKey} style={{ cursor:"pointer", padding:"6px 6px", fontSize:12, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", minHeight:26, display:"flex", alignItems:"center", gap:5, ...style }}>
+      <div ref={trigRef} {...rest} data-select="1" tabIndex={0} onClick={(e)=>{ e.stopPropagation(); open?setOpen(false):openMenu(); }} onBlur={()=>setOpen(false)} onKeyDown={onKey} style={{ cursor:"pointer", padding:"6px 6px", fontSize:12, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", minHeight:26, display:"flex", alignItems:"center", gap:5, ...style }}>
         <span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", color:cur?undefined:"#A9B2C4" }}>{label}</span>
         <span style={{ opacity:.45, fontSize:9 }}>▼</span>
       </div>
-      {open && (
-        <div style={{ position:"absolute", top:"100%", left:0, minWidth:"100%", background:"#fff", border:`1px solid ${C.line}`, borderRadius:8, boxShadow:"0 10px 26px rgba(20,35,62,.18)", zIndex:40, maxHeight:216, overflowY:"auto", padding:4 }}>
+      {open && pos && (
+        <div style={{ position:"fixed", top:pos.top, left:pos.left, minWidth:pos.width, background:"#fff", border:`1px solid ${C.line}`, borderRadius:8, boxShadow:"0 10px 26px rgba(20,35,62,.18)", zIndex:9999, maxHeight:216, overflowY:"auto", padding:4 }}>
           <div onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); onChange(clearV); setOpen(false); }} style={{ padding:"5px 8px", fontSize:11.5, color:C.sub, cursor:"pointer", borderRadius:5, whiteSpace:"nowrap" }}>{allLabel || "—"}</div>
           {opts.map((o)=>(
             <div key={String(o.v)} onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); onChange(o.v); setOpen(false); }} style={{ padding:"5px 8px", fontSize:12, cursor:"pointer", borderRadius:5, whiteSpace:"nowrap", background:o.v===value?"#EAF1FD":"transparent", fontWeight:o.v===value?700:400 }}>{o.l}</div>
@@ -2520,7 +2552,7 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
   const [fType, setFType] = useState(""); const [fBrand, setFBrand] = useState(""); const [fContent, setFContent] = useState(""); const [fPay, setFPay] = useState(""); const [fPic, setFPic] = useState(""); const [fDcu, setFDcu] = useState(""); const [fAffil, setFAffil] = useState("");
   const [sortKey, setSortKey] = useState(""); const [sortDir, setSortDir] = useState(1);
   const targetOf = (r)=> r.dealType==="Retainer" ? (Number(r.perMonth)||0)*(Number(r.months)||0) : (Number(r.qty)||0);
-  const sortVal = (r,k)=>{ switch(k){ case "partner": return (r.partner||"").toLowerCase(); case "brand": return (r.brand||"").toLowerCase(); case "dealType": return (r.dealType||"").toLowerCase(); case "desc": return (r.desc||"").toLowerCase(); case "scope": return targetOf(r); case "delivered": return Number(r.delivered)||0; case "dcu": return r.dcu?1:0; case "affiliate": return r.affiliate?1:0; case "fee": return Number(r.fee)||0; case "status": return (r.status||"").toLowerCase(); case "payStatus": return (r.payStatus||"").toLowerCase(); case "start": return r.start||""; case "end": return r.end||""; case "pic": return (r.pic||"").toLowerCase(); default: return ""; } };
+  const sortVal = (r,k)=>{ switch(k){ case "partner": return (r.partner||"").toLowerCase(); case "brand": return (r.brand||"").toLowerCase(); case "dealType": return (r.dealType||"").toLowerCase(); case "desc": return (r.desc||"").toLowerCase(); case "scope": return targetOf(r); case "delivered": return Number(r.delivered)||0; case "dcu": return r.dcu?1:0; case "affiliate": return r.affiliate?1:0; case "fee": return Number(r.fee)||0; case "status": return (r.status||"").toLowerCase(); case "payStatus": return (r.payStatus||"").toLowerCase(); case "dateAdded": return r.dateAdded||""; case "start": return r.start||""; case "end": return r.end||""; case "pic": return (r.pic||"").toLowerCase(); default: return ""; } };
   const toggleSort = (k)=>{ if(sortKey===k) setSortDir((d)=>-d); else { setSortKey(k); setSortDir(1); } };
   const sortArrow = (k)=><span style={{ opacity:sortKey===k?1:.35, marginLeft:3 }}>{sortKey===k ? (sortDir===1?"▲":"▼") : "↕"}</span>;
   const anyFilter = !!(fType||fBrand||fContent||fPay||fPic||fDcu||fAffil);
@@ -2628,21 +2660,21 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
       </div>
       ); })()}
       <div style={{ ...card(0), overflow:"visible" }}>
-        <div style={{ overflow:"visible" }}>
-          <table className="xl" style={{ width:"100%", minWidth:1720 }}>
+        <div style={{ overflowX:"auto", overflowY:"visible" }}>
+          <table className="xl" style={{ width:"100%", minWidth:1824 }}>
             <colgroup>
               <col style={{ width:150 }} /><col style={{ width:100 }} /><col style={{ width:118 }} /><col style={{ width:180 }} /><col style={{ width:150 }} /><col style={{ width:148 }} /><col style={{ width:60 }} /><col style={{ width:64 }} /><col style={{ width:88 }} />
-              <col style={{ width:126 }} /><col style={{ width:126 }} /><col style={{ width:98 }} /><col style={{ width:98 }} /><col style={{ width:86 }} /><col style={{ width:78 }} /><col style={{ width:40 }} />
+              <col style={{ width:126 }} /><col style={{ width:126 }} /><col style={{ width:104 }} /><col style={{ width:98 }} /><col style={{ width:98 }} /><col style={{ width:86 }} /><col style={{ width:78 }} /><col style={{ width:40 }} />
             </colgroup>
             <thead><tr style={{ background:BLUE.head }}>
-              {[["Partner / Client","partner"],["Brand","brand"],["Deal type","dealType"],["Project description","desc"],["Scope","scope"],["Delivered / target","delivered"],["DCU","dcu"],["Affiliate","affiliate"],["Rate (RM)","fee"],["Content status","status"],["Payment status","payStatus"],["Start","start"],["End","end"],["PIC","pic"]].map(([label,key])=><th key={key} style={{ ...th, cursor:"pointer", userSelect:"none" }} onClick={()=>toggleSort(key)}>{label}{sortArrow(key)}</th>)}
+              {[["Partner / Client","partner"],["Brand","brand"],["Deal type","dealType"],["Project description","desc"],["Scope","scope"],["Delivered / target","delivered"],["DCU","dcu"],["Affiliate","affiliate"],["Rate (RM)","fee"],["Content status","status"],["Payment status","payStatus"],["Added","dateAdded"],["Start","start"],["End","end"],["PIC","pic"]].map(([label,key])=><th key={key} style={{ ...th, cursor:"pointer", userSelect:"none" }} onClick={()=>toggleSort(key)}>{label}{sortArrow(key)}</th>)}
               <th style={{ ...th, textAlign:"center" }}>Actions</th>
               <th style={{ ...th, borderRight:"none" }}></th>
             </tr></thead>
             <tbody>
               <tr className="addrow" style={{ background:"#FCFDFF" }}>
                 <td><input value={newPartner} onChange={(e)=>setNewPartner(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commitNew(); } }} onBlur={commitNew} placeholder="+ New deal — partner name, press Enter…" /></td>
-                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
               </tr>
               {list.map((r)=>(
                 <tr key={r._id} style={{ background:"#fff" }}>
@@ -2661,6 +2693,7 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
                   <td><NumCell value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:v})} placeholder="0" style={{ textAlign:"right" }} /></td>
                   <td><HoverSelect value={r.status||""} options={L.collabStatus||[]} onChange={(v)=>onPatch(r._id,{status:v})} placeholder="status" style={{ background:STATUS_TINT[r.status]||"transparent", color:statusInk(r.status), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
                   <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
+                  <td><DateCell value={r.dateAdded} onCommit={(v)=>onPatch(r._id,{dateAdded:v})} /></td>
                   <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
                   <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
                   <td><HoverSelect value={r.pic||""} options={team} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
@@ -3395,7 +3428,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
   const [members,setMembers]=useState(null); const [mErr,setMErr]=useState("");
   const [editId,setEditId]=useState(null); const [eRole,setERole]=useState("user"); const [eTabs,setETabs]=useState([]); const [eBusy,setEBusy]=useState(false);
   const [cRoles,setCRoles]=useState([]); const [emp,setEmp]=useState("Full time");
-  const [eRoles,setERoles]=useState([]); const [eEmp,setEEmp]=useState("Full time");
+  const [eRoles,setERoles]=useState([]); const [eEmp,setEEmp]=useState("Full time"); const [eName,setEName]=useState("");
   // App-managed editors: an email on data.editors is an editor even if their Supabase role is "user".
   const appEditors = ((data && data.editors) || []).map((e)=>String(e||"").toLowerCase());
   const isAppEditor = (u)=> u.role==="editor" || appEditors.includes(String(u.email||"").toLowerCase());
@@ -3411,9 +3444,9 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
     else { setMsg({ ok:true, text:`✓ ${email} enrolled as ${role==="admin"?"Admin":role==="editor"?"Editor":"Member"}.` }); setName(""); setEmail(""); setPw(""); setRole("user"); setTabs(MEMBER_TABS.map((t)=>t[0])); setCRoles([]); setEmp("Full time"); load(); }
   };
   const remove = async (u)=>{ const ok = window.confirm ? window.confirm(`Remove ${u.email}? They will lose access to Content Hub immediately.`) : true; if(!ok) return; try{ await onRemoveUser(u.id); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } };
-  const startEdit = (u)=>{ setEditId(u.id); setERole(isAppEditor(u)?"editor":(u.role||"user")); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); setERoles(Array.isArray(u.contentRoles)?u.contentRoles.slice():[]); setEEmp(u.employment||"Full time"); };
+  const startEdit = (u)=>{ setEditId(u.id); setEName(u.name||""); setERole(isAppEditor(u)?"editor":(u.role||"user")); setETabs(Array.isArray(u.tabs)?u.tabs.slice():MEMBER_TABS.map((t)=>t[0])); setERoles(Array.isArray(u.contentRoles)?u.contentRoles.slice():[]); setEEmp(u.employment||"Full time"); };
   const toggleETab = (id)=>{ if(id==="pipeline") return; setETabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]); };
-  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, email:u.email, role:eRole, tabs: eRole==="admin"?null:eTabs, contentRoles:eRoles, employment:eEmp }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
+  const saveEdit = async (u)=>{ setEBusy(true); setMErr(""); try{ await onUpdateUser({ id:u.id, email:u.email, role:eRole, tabs: eRole==="admin"?null:eTabs, contentRoles:eRoles, employment:eEmp, name:eName.trim(), oldName:u.name||"" }); setEditId(null); load(); }catch(e){ setMErr(String((e&&e.message)||e)); } setEBusy(false); };
   return (
     <div>
       <Toolbar title="Admin" sub="Enrol team members, set which tabs they can access, and manage logins" />
@@ -3463,10 +3496,13 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                     {(u.employment || (Array.isArray(u.contentRoles)&&u.contentRoles.length>0)) && <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>{u.employment && <Pill bg={u.employment==="Full time"?"#DCE8FB":"#FCE9D6"} fg={u.employment==="Full time"?"#1E3F86":"#8a5a1a"}>{u.employment}</Pill>}{Array.isArray(u.contentRoles)&&u.contentRoles.map((cr)=><Pill key={cr} bg="#EEF1F6" fg={C.sub}>{cr}</Pill>)}</div>}
                   </div>
                   <Pill bg={u.role==="admin"?C.yellow:isAppEditor(u)?"#E5DEFA":"#EEF1F6"} fg={u.role==="admin"?C.navy:isAppEditor(u)?"#4B2E9E":C.sub}>{u.role==="admin"?"Admin":isAppEditor(u)?"Editor":"Member"}</Pill>
-                  {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : <span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span>}
+                  {u.email!==myEmail ? (<React.Fragment><IconBtn title="Edit access" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><IconBtn title="Remove member" danger onClick={()=>remove(u)}><Trash2 size={14} /></IconBtn></React.Fragment>) : (<React.Fragment><IconBtn title="Edit your name" onClick={()=>editId===u.id?setEditId(null):startEdit(u)}><Pencil size={14} /></IconBtn><span style={{ fontSize:10, color:C.sub, width:24, textAlign:"center" }}>you</span></React.Fragment>)}
                 </div>
                 {editId===u.id && (
                   <div style={{ borderTop:`1px solid ${C.line}`, padding:"10px 12px", background:"#FAFBFD" }}>
+                    <label style={lbl}>Full name</label>
+                    <input value={eName} onChange={(e)=>setEName(e.target.value)} placeholder="Display name" style={{ ...inp(), marginBottom:10 }} />
+                    {u.email!==myEmail && (<React.Fragment>
                     <label style={lbl}>Role</label>
                     <select value={eRole} onChange={(e)=>setERole(e.target.value)} style={{ ...inp(), marginBottom:10 }}><option value="user">Member</option><option value="editor">Editor</option><option value="admin">Admin</option></select>
                     {eRole==="user" && (
@@ -3485,6 +3521,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
                       <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>{CONTENT_ROLES.map((cr)=>roleChip(cr, eRoles.includes(cr), ()=>setERoles((s)=>s.includes(cr)?s.filter((x)=>x!==cr):[...s,cr])))}</div>
                     </div>
                     <div style={{ marginBottom:10 }}><label style={lbl}>Employment</label><select value={eEmp} onChange={(e)=>setEEmp(e.target.value)} style={inp()}>{EMPLOYMENT_TYPES.map((x)=><option key={x} value={x}>{x}</option>)}</select></div>
+                    </React.Fragment>)}
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
                       <button onClick={()=>setEditId(null)} style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.sub, borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:600, cursor:"pointer" }}>Cancel</button>
                       <button onClick={()=>saveEdit(u)} disabled={eBusy} style={{ border:"none", background:eBusy?"#9FB0CC":C.navy, color:"#fff", borderRadius:8, padding:"7px 15px", fontSize:12.5, fontWeight:700, cursor:eBusy?"default":"pointer" }}>{eBusy?"Saving…":"Save access"}</button>
