@@ -640,10 +640,10 @@ function App() {
   // editors get a locked-down nav: Content always; Payout only for part-time editors
   const visibleNav = isEditor ? NAV.filter((n)=>n.id==="pipeline" || (n.id==="payout" && isPartTime))
     : (!isAdmin && Array.isArray(allowedTabs)) ? NAV.filter((n)=>n.id==="pipeline" || allowedTabs.includes(n.id)) : NAV;
-  // editors are confined to Content (+ Payout only if part-time) — never allow the active tab to drift elsewhere
-  useEffect(()=>{ if (isEditor && tab!=="pipeline" && !(tab==="payout" && isPartTime)) setTab("pipeline"); }, [isEditor, tab, isPartTime]);
-
-  const pageTitle = (NAV.find((n)=>n.id===tab) || {}).label || "Dashboard";
+  // editors are confined to Content (+ Payout only if part-time); never let the active tab drift to a forbidden one.
+  // (render-time guard — no hook, so it stays above the early returns' hook order)
+  const safeTab = (isEditor && safeTab!=="pipeline" && !(tab==="payout" && isPartTime)) ? "pipeline" : tab;
+  const pageTitle = (NAV.find((n)=>n.id===safeTab) || {}).label || "Dashboard";
 
   return (
     <div style={{ minHeight:"100vh", background:C.canvas, color:C.ink }}>
@@ -657,7 +657,7 @@ function App() {
           <button onClick={logout} style={{ border:"1px solid #2C3F5E", background:C.navy2, color:"#B9C6DD", borderRadius:8, padding:"6px 12px", fontSize:12, fontWeight:600, cursor:"pointer", flexShrink:0 }}>Log out</button>
         </div>
         <nav style={{ display:"flex", gap:2, padding:"0 12px", overflowX:"auto" }}>
-          {visibleNav.map((n)=>{ const on=tab===n.id; const Icon=n.icon; return (
+          {visibleNav.map((n)=>{ const on=safeTab===n.id; const Icon=n.icon; return (
             <button key={n.id} onClick={()=>setTab(n.id)} style={{ border:"none", cursor:"pointer", background:on?C.navy2:"transparent", color:on?"#fff":"#8696B4", padding:"11px 13px", fontSize:12.5, fontWeight:600, display:"flex", alignItems:"center", gap:7, whiteSpace:"nowrap", borderBottom:`3px solid ${on?C.yellow:"transparent"}`, borderRadius:"8px 8px 0 0" }} onMouseEnter={(e)=>{ if(!on) e.currentTarget.style.background="#1A2B49"; }} onMouseLeave={(e)=>{ if(!on) e.currentTarget.style.background="transparent"; }}><Icon size={16} />{n.label}</button>
           ); })}
         </nav>
@@ -667,13 +667,13 @@ function App() {
         <header style={{ background:"#fff", borderBottom:`1px solid ${C.line}`, padding:"12px 24px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
           <div style={{ flex:1 }} />
           {saved && <span style={{ color:"#15724A", fontSize:12, fontWeight:600 }}>● {saved}</span>}
-          {tab!=="calendar" && tab!=="insight" && (
+          {safeTab!=="calendar" && safeTab!=="insight" && (
             <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
               <Search size={15} color={C.sub} style={{ position:"absolute", left:10 }} />
               <input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search…" style={{ background:"#F6F7FB", border:`1px solid ${C.line}`, color:C.ink, borderRadius:9, padding:"8px 10px 8px 31px", fontSize:13, width:200, outline:"none", fontFamily:"inherit" }} />
             </div>
           )}
-          {tab!=="pipeline" && tab!=="calendar" && tab!=="insight" && (
+          {safeTab!=="pipeline" && safeTab!=="calendar" && safeTab!=="insight" && (
             <select value={brandFilter} onChange={(e)=>setBrandFilter(e.target.value)} style={{ border:`1px solid ${C.line}`, borderRadius:9, padding:"8px 10px", fontSize:12.5, fontFamily:"inherit", background:"#fff", cursor:"pointer", color:C.ink }}>
               <option value="All">All brands</option>{L.brands.map((b)=><option key={b} value={b}>{b}</option>)}
             </select>
@@ -681,19 +681,19 @@ function App() {
         </header>
 
         <div style={{ padding:24, flex:1 }}>
-          {tab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onImport={importAll} onConnect={connectInsight} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="pipeline" && (isEditor
+          {safeTab==="insight" && <Insight rows={filt(data.pipeline)} allRows={data.pipeline} lists={L} onPatch={patchPiece} onCreate={importPieces} onImport={importAll} onConnect={connectInsight} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
+          {safeTab==="pipeline" && (isEditor
             ? <EditorContent rows={data.pipeline.filter((r)=>!r.imported && r.editor===myName)} myName={myName} onSetStatus={(id,s)=>setPipelineStatus(id,s)} />
             : <ContentBoard rows={filt(data.pipeline).filter((r)=>!r.imported)} allRows={data.pipeline} lists={L} isAdmin={isAdmin} myName={myName} quota={data.settings.ideaQuota} onAdd={()=>openAdd("pipeline")} onEdit={(r)=>openEdit("pipeline",r)} onDel={(id)=>del("pipeline",id)} onDuplicate={duplicatePiece} onPatch={patchPiece} onQuickAdd={quickAddPiece} topicLinks={data.topicLinks} memberPhones={data.memberPhones} brandFilter={brandFilter} setBrandFilter={setBrandFilter} setStatus={(id,s)=>setPipelineStatus(id,s)} onPaste={applyGridPaste} onUndo={undoGrid} canUndo={canUndo} />)}
-          {tab==="calendar" && <Calendar rows={filt(data.pipeline).filter((r)=>!r.imported)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
-          {tab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} phones={data.memberPhones} invoiceProfile={data.invoiceProfile} onSaveProfile={saveInvoiceProfile} />}
-        {tab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
-          {tab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
-          {tab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} growth={data.followerGrowth} onSaveGrowth={saveFollowerGrowth} brands={L.brands} />}
-          {tab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
-          {tab==="payout" && !(isEditor && !isPartTime) && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
-          {tab==="settings" && <Lists data={data} persist={persist} />}
-          {tab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
+          {safeTab==="calendar" && <Calendar rows={filt(data.pipeline).filter((r)=>!r.imported)} allTeam={L.team} isAdmin={isAdmin} myName={myName} dailyPosts={data.settings.dailyPosts} brands={L.brands} brandFilter={brandFilter} setBrandFilter={setBrandFilter} query={query} setQuery={setQuery} />}
+          {safeTab==="collabs" && <Collabs rows={filt(data.collabs)} lists={L} isAdmin={isAdmin} onPatch={patchCollab} onQuickAdd={quickAddCollab} onDel={(id)=>del("collabs",id)} decks={data.collabDecks} onSaveDeck={saveDeck} phones={data.memberPhones} invoiceProfile={data.invoiceProfile} onSaveProfile={saveInvoiceProfile} />}
+        {safeTab==="accounts" && <Accounts rows={filt(data.accounts)} onAdd={()=>openAdd("accounts")} onEdit={(r)=>openEdit("accounts",r)} onDel={(id)=>del("accounts",id)} />}
+          {safeTab==="hiring" && <Hiring rows={data.hiring} isAdmin={isAdmin} siteUrl={typeof window!=="undefined"?window.location.origin:""} onAdd={()=>openAdd("hiring")} onEdit={(r)=>openEdit("hiring",r)} onDel={(id)=>del("hiring",id)} />}
+          {safeTab==="analytics" && <Analytics rows={data.pipeline} lists={L} followers={data.followers} onSaveFollowers={saveFollowers} growth={data.followerGrowth} onSaveGrowth={saveFollowerGrowth} brands={L.brands} />}
+          {safeTab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
+          {safeTab==="payout" && !(isEditor && !isPartTime) && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
+          {safeTab==="settings" && <Lists data={data} persist={persist} />}
+          {safeTab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} />}
         </div>
       </main>
 
