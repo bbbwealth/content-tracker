@@ -1322,31 +1322,61 @@ function ConnectModal({ source, candidates, connectedId, onConnect, onClose }) {
 
 // Editor role — restricted, read-only view of pieces assigned to them; can open assets and mark a piece Edited.
 function EditorContent({ rows, myName, onSetStatus }) {
-  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px" };
+  const [sortKey, setSortKey] = useState("filmed");
+  const [sortDir, setSortDir] = useState(-1);
+  const [fBrand, setFBrand] = useState(""); const [fTopic, setFTopic] = useState(""); const [fWriter, setFWriter] = useState(""); const [fStage, setFStage] = useState("");
+  const th = { textAlign:"left", fontSize:10.5, fontWeight:700, color:"#fff", padding:"10px 8px", whiteSpace:"nowrap", textTransform:"uppercase", letterSpacing:".2px", cursor:"pointer", userSelect:"none" };
   const assetOf = (r)=> r.assetsLink||r.contentLink||r.scriptLink||r.footageLink||"";
+  const filmedOf = (r)=> (r.stamps && r.stamps[ST.FILMED]) || "";
   const done = (r)=> r.status===ST.EDITED || r.status===ST.SCHEDULED || r.status===ST.PUBLISHED;
+  const uniq = (a)=>[...new Set(a.filter((v)=>v&&String(v).trim()))].sort((x,y)=>String(x).localeCompare(String(y)));
+  const brands=uniq(rows.map((r)=>r.brand)), topics=uniq(rows.map((r)=>r.category)), writers=uniq(rows.map((r)=>r.scriptWriter)), stages=uniq(rows.map((r)=>r.status));
+  const sortVal = (r,k)=>{ switch(k){ case "filmed": return filmedOf(r); case "title": return (r.title||"").toLowerCase(); case "brand": return (r.brand||"").toLowerCase(); case "category": return (r.category||"").toLowerCase(); case "scriptWriter": return (r.scriptWriter||"").toLowerCase(); case "status": return (r.status||"").toLowerCase(); case "target": return r.target||""; default: return ""; } };
+  const toggleSort = (k)=>{ if(sortKey===k) setSortDir((d)=>-d); else { setSortKey(k); setSortDir(1); } };
+  const arrow = (k)=><span style={{ opacity:sortKey===k?1:.35, marginLeft:3 }}>{sortKey===k ? (sortDir===1?"▲":"▼") : "↕"}</span>;
+  const anyFilter = !!(fBrand||fTopic||fWriter||fStage);
+  let list = rows.slice();
+  if(fBrand) list=list.filter((r)=>r.brand===fBrand);
+  if(fTopic) list=list.filter((r)=>r.category===fTopic);
+  if(fWriter) list=list.filter((r)=>r.scriptWriter===fWriter);
+  if(fStage) list=list.filter((r)=>r.status===fStage);
+  list.sort((a,b)=>{ const x=sortVal(a,sortKey), y=sortVal(b,sortKey); if(x===y) return 0; if(x==="") return 1; if(y==="") return -1; return (x<y?-1:1)*sortDir; });
+  const selSty = { border:`1px solid ${C.line}`, borderRadius:8, padding:"5px 9px", fontSize:12, background:"#fff", color:C.ink, minWidth:96 };
+  const cols = [["filmed","Filmed"],["title","Idea"],["brand","Brand"],["category","Topic"],["scriptWriter","Writer"],["status","Stage"],["target","Schedule"]];
   return (
     <div>
-      <div style={{ marginBottom:16 }}>
+      <div style={{ marginBottom:12 }}>
         <div style={{ fontSize:18, fontWeight:800, color:C.ink }}>Your edit queue</div>
-        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{rows.length} piece{rows.length===1?"":"s"} assigned to you as editor. Open the assets, then mark a piece Edited when you're done.</div>
+        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{list.length} of {rows.length} piece{rows.length===1?"":"s"} assigned to you. Filmed = the date your team marked it ready to edit.</div>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:7, margin:"0 2px 10px", flexWrap:"wrap" }}>
+        <span style={{ fontSize:11, color:C.sub }}>Filter</span>
+        <HoverSelect value={fBrand} options={brands} allLabel="All brands" allValue="" onChange={setFBrand} style={selSty} />
+        <HoverSelect value={fTopic} options={topics} allLabel="All topics" allValue="" onChange={setFTopic} style={selSty} />
+        <HoverSelect value={fWriter} options={writers} allLabel="All writers" allValue="" onChange={setFWriter} style={selSty} />
+        <HoverSelect value={fStage} options={stages} allLabel="All stages" allValue="" onChange={setFStage} style={selSty} />
+        {(anyFilter||sortKey!=="filmed"||sortDir!==-1) && <button onClick={()=>{ setFBrand("");setFTopic("");setFWriter("");setFStage("");setSortKey("filmed");setSortDir(-1); }} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
       </div>
       <div style={{ ...card(0), overflow:"hidden" }}>
         <div style={{ overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:820 }}>
-            <colgroup><col /><col style={{ width:130 }} /><col style={{ width:120 }} /><col style={{ width:104 }} /><col style={{ width:118 }} /><col style={{ width:110 }} /><col style={{ width:150 }} /></colgroup>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:920 }}>
+            <colgroup><col style={{ width:104 }} /><col /><col style={{ width:130 }} /><col style={{ width:120 }} /><col style={{ width:104 }} /><col style={{ width:118 }} /><col style={{ width:104 }} /><col style={{ width:110 }} /><col style={{ width:150 }} /></colgroup>
             <thead><tr style={{ background:BLUE.head }}>
-              {["Idea","Brand","Topic","Writer","Stage","Assets",""].map((h,i)=><th key={i} style={{ ...th, ...(i===6?{ borderRight:"none" }:null) }}>{h}</th>)}
+              {cols.map(([k,label])=><th key={k} style={th} onClick={()=>toggleSort(k)}>{label}{arrow(k)}</th>)}
+              <th style={{ ...th, cursor:"default" }}>Assets</th>
+              <th style={{ ...th, cursor:"default", borderRight:"none" }}></th>
             </tr></thead>
             <tbody>
-              {rows.length===0 && <tr><td colSpan={7} style={{ padding:0 }}><Empty>Nothing is assigned to you to edit yet.</Empty></td></tr>}
-              {rows.map((r,i)=>{ const a=assetOf(r); return (
+              {list.length===0 && <tr><td colSpan={9} style={{ padding:0 }}><Empty>{rows.length===0 ? "Nothing is assigned to you to edit yet." : "No pieces match those filters."}</Empty></td></tr>}
+              {list.map((r,i)=>{ const a=assetOf(r); const fd=filmedOf(r); return (
                 <tr key={r._id} style={{ background:i%2?"#F5F7FB":"#fff" }}>
+                  <td style={{ fontSize:12, color:fd?C.ink:"#C7CFDD", padding:"9px 8px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap" }}>{fd?isoToDisp(fd):"—"}</td>
                   <td style={{ fontSize:12.5, fontWeight:600, padding:"9px 8px", borderBottom:`1px solid ${C.line}`, maxWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.title||"(untitled)"}</td>
                   <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}><BrandTag b={r.brand} /></td>
                   <td style={{ fontSize:12, color:C.sub, padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{r.category||"—"}</td>
                   <td style={{ fontSize:12, padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{r.scriptWriter||"—"}</td>
                   <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}><span style={{ background:STAGE_TINT[r.status]||"#EEF1F6", color:STAGE_INK[r.status]||C.sub, fontWeight:700, fontSize:11.5, padding:"3px 9px", borderRadius:6 }}>{r.status}</span></td>
+                  <td style={{ fontSize:12, color:r.target?C.ink:"#C7CFDD", padding:"9px 8px", borderBottom:`1px solid ${C.line}`, whiteSpace:"nowrap" }}>{r.target ? isoToDisp(r.target) : "—"}</td>
                   <td style={{ padding:"9px 8px", borderBottom:`1px solid ${C.line}` }}>{a ? <a href={a} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:5, border:`1px solid ${BLUE.accent}`, color:BLUE.accent, borderRadius:7, padding:"5px 10px", fontSize:11.5, fontWeight:700, textDecoration:"none" }}>Open ↗</a> : <span style={{ color:"#C7CFDD", fontSize:12 }}>— no link —</span>}</td>
                   <td style={{ padding:"7px 8px", borderBottom:`1px solid ${C.line}`, borderRight:"none" }}>
                     {done(r) ? <span style={{ display:"inline-flex", alignItems:"center", gap:5, color:"#15724A", fontWeight:700, fontSize:12 }}>✓ Edited</span>
@@ -1365,9 +1395,11 @@ function EditorContent({ rows, myName, onSetStatus }) {
 // Payout — editors record their rate, edited-content count, payee details, and submit invoices. Admins see everyone.
 function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubmitInvoice }) {
   const P = (rows||[]).filter((r)=>!r.imported);
-  const editedBy = (name)=> P.filter((r)=>r.editor===name && (r.stamps && r.stamps[ST.EDITED]));
+  // a piece counts as "edited" only if its CURRENT stage is Edited or beyond — reverting to Filmed removes it
+  const isEdited = (r)=> r.status===ST.EDITED || r.status===ST.SCHEDULED || r.status===ST.PUBLISHED;
+  const editedBy = (name)=> P.filter((r)=>r.editor===name && isEdited(r));
   const POUT = payouts || {};
-  const editorsFromData = [...new Set(P.filter((r)=>r.editor && (r.stamps&&r.stamps[ST.EDITED])).map((r)=>r.editor))];
+  const editorsFromData = [...new Set(P.filter((r)=>r.editor && isEdited(r)).map((r)=>r.editor))];
   const names = isAdmin ? [...new Set([...editorsFromData, ...Object.keys(POUT)])].filter(Boolean).sort() : [myName];
   const fmt = (n)=>Number(n||0).toLocaleString();
   const fld = (label, val, onCommit, ph, readOnly) => (
