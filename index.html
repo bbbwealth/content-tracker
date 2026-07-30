@@ -78,6 +78,7 @@ const GripVertical = ({ size = 14, color = "#C2CAD8" }) => (
 const Activity = (p) => <Svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></Svg>;
 const ClipboardList = (p) => <Svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M9 4H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-2"/><path d="M8 11h8"/><path d="M8 15h6"/></Svg>;
 const Shield = (p) => <Svg {...p}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></Svg>;
+const ExternalLink = (p) => <Svg {...p}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></Svg>;
 const UserPlus = (p) => <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></Svg>;
 const BarChart3 = (p) => <Svg {...p}><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="6"/><rect x="12" y="7" width="3" height="10"/><rect x="17" y="13" width="3" height="4"/></Svg>;
 const Copy = (p) => <Svg {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Svg>;
@@ -188,6 +189,7 @@ const SEED = {
     collabStatus:["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"],
     collabPayStatus:["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"],
     collabDealType:["Campaign","Retainer","Appearance"],
+    collabPic:[],
     collabTypes:["Affiliate (Performance-Based)","Campaign (One-Off Paid)","Partnership (Long-Term / Retainer)"],
     docStatus:["Pending","Done","N/A"],
     topics:["Finance","AI","Travel","Lifestyle","Food","Politics","Current Affairs"],
@@ -293,6 +295,16 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
     d.settings.mergedV1 = true;
   }
   if (!d.lists.pipelineStatus || !d.lists.pipelineStatus.length) d.lists.pipelineStatus = STAGES.slice();
+  // Collab PIC is its own managed list; seed it once from the team names so existing PICs stay valid
+  if (!d.lists.collabPic) d.lists.collabPic = (d.lists.team || []).filter((t)=>t!=="Unassigned").slice();
+  // External tab: admin-managed label → URL links, seeded once
+  if (!Array.isArray(d.settings.externalLinks)) d.settings.externalLinks = [
+    { label:"Payroll", url:"https://www.kakitangan.com/" },
+    { label:"BBBW Finance", url:"" },
+    { label:"BBBA Finance", url:"" },
+    { label:"Webull Affiliate", url:"" },
+    { label:"Moomoo Affiliate", url:"" },
+  ];
   // one-time: insert the "Ready for Film" stage (between Scripted and Filmed) into existing boards
   if (!d.settings.readyForFilmV1) {
     const ps = d.lists.pipelineStatus.slice();
@@ -628,12 +640,14 @@ function App() {
     persist(next);
     return out;
   };
+  // External tab is a page of admin-managed third-party links (label → URL)
+  const saveExternalLinks = (links) => persist({ ...data, settings:{ ...data.settings, externalLinks:links } });
   // keep the Team/Owner list (source of the Owner/Writer/Editor dropdowns) in sync with actual members
   const addTeamNames = (names) => { const cur = data.lists.team || []; const add = (names||[]).filter((n)=>n && !cur.includes(n)); if (add.length) persist({ ...data, lists:{ ...data.lists, team:[ ...cur, ...add ] } }); };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const NAV = [
     { id:"pipeline", label:"Content", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays }, { id:"insight", label:"Insight", icon:TrendingUp }, { id:"analytics", label:"Analytics", icon:TrendingUp },
-    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"incentive", label:"Incentive", icon:Trophy }, { id:"payout", label:"Payout", icon:Trophy }, { id:"settings", label:"Lists", icon:Settings },
+    { id:"collabs", label:"Collabs", icon:Briefcase }, { id:"accounts", label:"Accounts", icon:AtSign }, { id:"hiring", label:"Hiring", icon:Megaphone }, { id:"incentive", label:"Incentive", icon:Trophy }, { id:"payout", label:"Payout", icon:Trophy }, { id:"settings", label:"Lists", icon:Settings }, { id:"external", label:"External", icon:ExternalLink },
     ...(isAdmin ? [{ id:"admin", label:"Admin", icon:Shield }] : []),
   ];
   const allowedTabs = currentUser.app_metadata && currentUser.app_metadata.tabs;
@@ -695,6 +709,7 @@ function App() {
           {safeTab==="incentive" && <Incentive data={data.incentive} isAdmin={isAdmin} onSave={saveIncentive} myName={myName} followers={data.followers} brands={L.brands} />}
           {safeTab==="payout" && !(isEditor && !isPartTime) && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
           {safeTab==="settings" && <Lists data={data} persist={persist} />}
+          {safeTab==="external" && <ExternalLinks links={(data.settings&&data.settings.externalLinks)||[]} isAdmin={isAdmin} onSave={saveExternalLinks} />}
           {safeTab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} onSyncTeam={addTeamNames} />}
         </div>
       </main>
@@ -2655,7 +2670,7 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
         <HoverSelect value={fType} options={dealTypes} allLabel="All types" allValue="" onChange={setFType} style={selSty} />
         <HoverSelect value={fContent} options={L.collabStatus||[]} allLabel="Any content" allValue="" onChange={setFContent} style={selSty} />
         <HoverSelect value={fPay} options={L.collabPayStatus||[]} allLabel="Any payment" allValue="" onChange={setFPay} style={selSty} />
-        <HoverSelect value={fPic} options={team} allLabel="Any PIC" allValue="" onChange={setFPic} style={selSty} />
+        <HoverSelect value={fPic} options={L.collabPic||[]} allLabel="Any PIC" allValue="" onChange={setFPic} style={selSty} />
         <HoverSelect value={fDcu} options={["Yes","No"]} allLabel="DCU: any" allValue="" onChange={setFDcu} style={selSty} />
         <HoverSelect value={fAffil} options={["Yes","No"]} allLabel="Affiliate: any" allValue="" onChange={setFAffil} style={selSty} />
         {(anyFilter||sortKey) && <button onClick={clearAll} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
@@ -2698,7 +2713,7 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
                   <td><DateCell value={r.dateAdded} onCommit={(v)=>onPatch(r._id,{dateAdded:v})} /></td>
                   <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
                   <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
-                  <td><HoverSelect value={r.pic||""} options={team} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
+                  <td><HoverSelect value={r.pic||""} options={L.collabPic||[]} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
                   <td style={{ textAlign:"center", whiteSpace:"nowrap" }}>
                     <IconBtn title="Send info" onClick={()=>setShareDeal(r)}><Share2 size={13} /></IconBtn>
                     <IconBtn title="Issue invoice" onClick={()=>setInvoiceDeal(r)}><FileText size={13} /></IconBtn>
@@ -3166,8 +3181,8 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabDealType:"Collab Deal Type", collabTypes:"Collab Types", docStatus:"Doc Status" };
-const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"]];
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabDealType:"Collab Deal Type", collabTypes:"Collab Types", collabPic:"Collab PIC", docStatus:"Doc Status" };
+const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"],["external","External"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
   const rm = (key,val) => persist({ ...data, lists:{ ...data.lists, [key]:data.lists[key].filter((v)=>v!==val) } });
@@ -3202,6 +3217,45 @@ function Lists({ data, persist }) {
 function AddInline({ onAdd }) {
   const [v,setV] = useState("");
   return (<div style={{ display:"flex", gap:6 }}><input value={v} onChange={(e)=>setV(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ onAdd(v); setV(""); } }} placeholder="Add…" style={{ flex:1, border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 9px", fontSize:12, outline:"none" }} /><button onClick={()=>{ onAdd(v); setV(""); }} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:7, width:30, cursor:"pointer" }}>+</button></div>);
+}
+
+// External tab — admin-managed list of third-party links; each opens in a new browser tab
+function ExternalLinks({ links, isAdmin, onSave }) {
+  const L = Array.isArray(links) ? links : [];
+  const open = (url)=>{ let u=String(url||"").trim(); if(!u) return; if(!/^https?:\/\//i.test(u)) u="https://"+u; window.open(u,"_blank","noopener,noreferrer"); };
+  const setAt = (i, patch)=> onSave(L.map((x,j)=> j===i ? { ...x, ...patch } : x));
+  const add = ()=> onSave([ ...L, { label:"", url:"" } ]);
+  const remove = (i)=> onSave(L.filter((_,j)=>j!==i));
+  return (
+    <div>
+      <div style={{ marginBottom:16, display:"flex", alignItems:"center", gap:12 }}>
+        <div>
+          <div style={{ fontSize:18, fontWeight:800, color:C.ink }}>External links</div>
+          <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>Quick links to third-party tools — each opens in a new browser tab.{isAdmin?" Edit the label and URL below.":""}</div>
+        </div>
+        {isAdmin && <button onClick={add} style={{ marginLeft:"auto", border:"none", background:C.navy, color:"#fff", padding:"9px 15px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer", display:"flex", alignItems:"center", gap:7 }}><Plus size={16} />Add link</button>}
+      </div>
+      {L.length===0 ? <Empty>{isAdmin ? "No links yet. Click ‘Add link’ to create one." : "No links yet."}</Empty> : (
+        <div style={{ ...card(0), overflow:"hidden" }}>
+          {L.map((r,i)=>{ const hasUrl=!!String(r.url||"").trim(); const last=i===L.length-1; const rowSty={ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", borderBottom: last?"none":`1px solid ${C.line}` }; return isAdmin ? (
+            <div key={i} style={rowSty}>
+              <InlineText value={r.label} onCommit={(v)=>setAt(i,{label:v})} placeholder="Label" style={{ width:200, flexShrink:0, border:`1px solid ${C.line}`, borderRadius:7, padding:"7px 9px", fontSize:13, fontWeight:700, fontFamily:"inherit" }} />
+              <InlineText value={r.url} onCommit={(v)=>setAt(i,{url:v})} placeholder="https://…" style={{ flex:1, minWidth:0, border:`1px solid ${C.line}`, borderRadius:7, padding:"7px 9px", fontSize:12.5, fontFamily:"inherit" }} />
+              <button onClick={()=>open(r.url)} disabled={!hasUrl} title="Open" style={{ border:"none", background:hasUrl?BLUE.accent:"#C7CFDD", color:"#fff", borderRadius:7, padding:"7px 11px", fontSize:12, fontWeight:700, cursor:hasUrl?"pointer":"default", display:"inline-flex", alignItems:"center", gap:6, flexShrink:0 }}><ExternalLink size={13} />Open</button>
+              <button onClick={()=>remove(i)} title="Remove" style={{ border:`1px solid ${C.line}`, background:"#fff", color:C.red, borderRadius:7, padding:"6px 9px", cursor:"pointer", flexShrink:0 }}><Trash2 size={13} /></button>
+            </div>
+          ) : (
+            <div key={i} onClick={()=>open(r.url)} style={{ ...rowSty, cursor:hasUrl?"pointer":"default", opacity:hasUrl?1:0.55 }} onMouseEnter={(e)=>{ if(hasUrl) e.currentTarget.style.background="#F5F7FB"; }} onMouseLeave={(e)=>{ e.currentTarget.style.background="transparent"; }}>
+              <span style={{ width:32, height:32, borderRadius:8, background:"#EEF1F6", display:"grid", placeItems:"center", color:C.navy, flexShrink:0 }}><ExternalLink size={16} /></span>
+              <span style={{ fontSize:13.5, fontWeight:700, color:C.ink, width:220, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.label||"(untitled)"}</span>
+              <span style={{ fontSize:12, color:C.sub, flex:1, minWidth:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{hasUrl ? String(r.url).replace(/^https?:\/\//,"") : "no link yet"}</span>
+              {hasUrl && <ArrowRight size={15} color={C.sub} style={{ flexShrink:0 }} />}
+            </div>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // read any file to a data URL (used for collab deck uploads)
