@@ -114,7 +114,7 @@ const toStage = (s) => (STAGES.includes(s) ? s : (LEGACY_STAGE[s] || STAGES[0]))
 const BLUE = { accent:"#2D6CDF", soft:"#DCE8FB", ink:"#1E3F86", head:"#1E3050" };
 
 const EMPLOYMENT_TYPES = ["Full time","Part time"];
-const CONTENT_ROLES = ["Talent","Social Media","Editor","Business Development"];
+const CONTENT_ROLES = ["Writer","Editor","Business Development"];
 const TRIP_TIERS = [
   { min:60000, label:"Japan", emoji:"🇯🇵" },
   { min:80000, label:"Europe", emoji:"🇪🇺" },
@@ -185,6 +185,8 @@ const SEED = {
     ideaStatus:["Backlog","Approved","Scheduled","In Progress","Parked","Killed"],
     priority:["High","Medium","Low"],
     team:["Hubert","Serene","Madeleine","Mark","Unassigned"],
+    writers:["Hubert","Serene","Madeleine","Mark"],
+    editors:["Serene","Madeleine","Mark"],
     calStatus:["Planned","Confirmed","Scheduled","Posted","Delayed"],
     collabStatus:["Pitching","Negotiating","Confirmed","In Production","Delivered","Dropped"],
     collabPayStatus:["Not Invoiced","Invoiced","Partially Paid","Paid","N/A"],
@@ -297,6 +299,10 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
   if (!d.lists.pipelineStatus || !d.lists.pipelineStatus.length) d.lists.pipelineStatus = STAGES.slice();
   // Collab PIC is its own managed list; seed it once from the team names so existing PICs stay valid
   if (!d.lists.collabPic) d.lists.collabPic = (d.lists.team || []).filter((t)=>t!=="Unassigned").slice();
+  // Writers & Editors are their own managed lists; seed once from who's actually assigned in existing content
+  const uniqStr = (arr)=>[...new Set((arr||[]).filter((v)=>v && String(v).trim()))];
+  if (!Array.isArray(d.lists.writers)) d.lists.writers = uniqStr((d.pipeline||[]).filter((x)=>!x.imported).map((x)=>x.scriptWriter));
+  if (!Array.isArray(d.lists.editors)) d.lists.editors = uniqStr((d.pipeline||[]).filter((x)=>!x.imported).map((x)=>x.editor));
   // External tab: admin-managed label → URL links, seeded once
   if (!Array.isArray(d.settings.externalLinks)) d.settings.externalLinks = [
     { label:"Payroll", url:"https://www.kakitangan.com/" },
@@ -359,7 +365,7 @@ const fieldSets = (L) => ({
     { k:"title", l:"Idea / Title", t:"text", full:1 },
     { k:"crossPost", l:"Cross-post to (other brands)", t:"multiselect", o:L.brands, full:1 },
     { k:"status", l:"Stage", t:"select", o:L.pipelineStatus }, { k:"platform", l:"Platform", t:"select", o:L.platforms },
-    { k:"owner", l:"Owner", t:"select", o:L.team }, { k:"scriptWriter", l:"Script writer", t:"select", o:L.team },
+    { k:"owner", l:"Owner", t:"select", o:L.team }, { k:"scriptWriter", l:"Script writer", t:"select", o:L.writers },
     { k:"dateAdded", l:"Date added", t:"date" }, { k:"target", l:"Schedule date", t:"date" },
     { k:"scriptLink", l:"Script link", t:"text", full:1 }, { k:"footageLink", l:"Footage link", t:"text", full:1 }, { k:"contentLink", l:"Content link", t:"text", full:1 },
     { k:"adminComment", l:"Admin comment", t:"textarea", full:1, adminOnly:1 },
@@ -1202,7 +1208,7 @@ function Insight({ rows, allRows, lists, onPatch, onCreate, onImport, onConnect,
         {(()=>{ const sel={ border:`1px solid ${C.line}`, borderRadius:8, padding:"7px 10px", fontSize:12.5, background:"#fff", color:C.ink, minWidth:112 }; return (<>
           <HoverSelect value={brandFilter||"All"} options={L.brands||[]} allLabel="All brands" allValue="All" onChange={(v)=>setBrandFilter && setBrandFilter(v)} style={sel} />
           <HoverSelect value={fConn} options={[{v:"yes",l:"Connected"},{v:"no",l:"Not connected"}]} allLabel="Any connection" allValue="" onChange={setFConn} style={sel} />
-          <HoverSelect value={fWriter} options={team} allLabel="All writers" allValue="" onChange={setFWriter} style={sel} />
+          <HoverSelect value={fWriter} options={L.writers||[]} allLabel="All writers" allValue="" onChange={setFWriter} style={sel} />
           <HoverSelect value={fTopic} options={L.topics||[]} allLabel="All topics" allValue="" onChange={setFTopic} style={sel} />
           {anyFilter && <button onClick={clearFilters} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
         </>); })()}
@@ -1990,8 +1996,8 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
     { field:"title",        kind:"text", label:"Idea" },
     { field:"category",     kind:"list", label:"Topic",   opts:()=>L.topics||[] },
     { field:"status",       kind:"list", label:"Stage",   opts:()=>stages },
-    { field:"scriptWriter", kind:"list", label:"Writer",  opts:()=>team },
-    { field:"editor",       kind:"list", label:"Editor",  opts:()=>team },
+    { field:"scriptWriter", kind:"list", label:"Writer",  opts:()=>L.writers||[] },
+    { field:"editor",       kind:"list", label:"Editor",  opts:()=>L.editors||[] },
     { field:"target",       kind:"date", label:"Schedule" },
   ];
   const NCOL = GRID_COLS.length;
@@ -2154,8 +2160,8 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
         <HoverSelect value={fType} options={L.types||[]} allLabel="All types" allValue="" onChange={setFType} style={selSty} />
         <HoverSelect value={fStage} options={stages} allLabel="All stages" allValue="" onChange={setFStage} style={selSty} />
         <HoverSelect value={fScript} options={[{v:"needs",l:"Needs script"},{v:"has",l:"Has script"}]} allLabel="Script: all" allValue="" onChange={setFScript} style={selSty} />
-        <HoverSelect value={fWriter} options={team} allLabel="All writers" allValue="" onChange={setFWriter} style={selSty} />
-        <HoverSelect value={fEditor} options={team} allLabel="All editors" allValue="" onChange={setFEditor} style={selSty} />
+        <HoverSelect value={fWriter} options={L.writers||[]} allLabel="All writers" allValue="" onChange={setFWriter} style={selSty} />
+        <HoverSelect value={fEditor} options={L.editors||[]} allLabel="All editors" allValue="" onChange={setFEditor} style={selSty} />
         {anyFilter && <button onClick={clearAll} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
         <span style={{ marginLeft:"auto", fontSize:11.5, color:C.sub, fontWeight:600 }}>{list.length} of {(rows||[]).length} pieces</span>
         <button onClick={onAdd} style={{ border:"none", background:C.navy, color:"#fff", padding:"8px 14px", borderRadius:9, fontWeight:700, fontSize:12.5, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}><Plus size={15} />New piece</button>
@@ -2197,8 +2203,8 @@ function ContentBoard({ rows, allRows, lists, isAdmin, myName, quota, onAdd, onE
                     <div style={{ display:"flex", alignItems:"center" }}>{r.imported ? <span title="Imported from Meta — this is a post that already went out, not one of your planned ideas" style={{ flexShrink:0, color:BLUE.accent, fontWeight:900, fontSize:11, paddingLeft:5 }}>⬆</span> : null}<InlineText data-r={ri} data-c={3} value={r.title} onCommit={(v)=>onPatch(r._id,{title:v})} placeholder="Idea…" /></div>,
                     <HoverSelect data-r={ri} data-c={4} value={r.category||""} options={L.topics||[]} onChange={(v)=>setTopic(r, v)} placeholder="topic" />,
                     <HoverSelect data-r={ri} data-c={5} value={r.status||stages[0]} options={stages} onChange={(v)=>setStatus(r._id, v)} style={{ background:STAGE_TINT[r.status]||"transparent", color:STAGE_INK[r.status]||C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} />,
-                    <HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={team} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} placeholder="writer" />,
-                    <HoverSelect data-r={ri} data-c={7} value={r.editor||""} options={team} onChange={(v)=>onPatch(r._id,{editor:v})} placeholder="editor" />,
+                    <HoverSelect data-r={ri} data-c={6} value={r.scriptWriter||""} options={L.writers||[]} onChange={(v)=>onPatch(r._id,{scriptWriter:v})} placeholder="writer" />,
+                    <HoverSelect data-r={ri} data-c={7} value={r.editor||""} options={L.editors||[]} onChange={(v)=>onPatch(r._id,{editor:v})} placeholder="editor" />,
                     <div style={{ display:"flex", alignItems:"center" }}><DateCell data-r={ri} data-c={8} value={r.target} onCommit={(v)=>onPatch(r._id,{target:v})} /><button onClick={()=>setStatus(r._id, r.status===ST.PUBLISHED ? ST.SCHEDULED : ST.PUBLISHED)} tabIndex={-1} title={r.imported ? "Published — came in from the Meta import, not ticked by the team" : (r.status===ST.PUBLISHED ? "Published — click to undo" : "Tick when published as scheduled")} style={{ border:"none", cursor:"pointer", background:r.status===ST.PUBLISHED?"#1FA463":"#E9EDF4", color:r.status===ST.PUBLISHED?"#fff":"#A9B2C4", width:18, height:18, borderRadius:5, fontSize:11, fontWeight:900, lineHeight:1, flexShrink:0, marginRight:4, display:"grid", placeItems:"center" }}>✓</button></div>,
                   ];
                   return (
@@ -3181,7 +3187,7 @@ function Pulse({ data }) {
   );
 }
 
-const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabDealType:"Collab Deal Type", collabTypes:"Collab Types", collabPic:"Collab PIC", docStatus:"Doc Status" };
+const LIST_LABELS = { brands:"Brands", types:"Content Types", topics:"Topics", ideaKind:"Idea Type (Organic/Collab)", platforms:"Platforms", pipelineStatus:"Pipeline Status", contentStatus:"Content Stage", ideaStatus:"Idea Status", priority:"Priority", team:"Team / Owner", writers:"Writers", editors:"Editors", calStatus:"Calendar Status", collabStatus:"Collab Content Status", collabPayStatus:"Collab Payment Status", collabDealType:"Collab Deal Type", collabTypes:"Collab Types", collabPic:"Collab PIC", docStatus:"Doc Status" };
 const MEMBER_TABS = [["pipeline","Content"],["calendar","Calendar"],["insight","Insight"],["analytics","Analytics"],["collabs","Collabs"],["accounts","Accounts"],["hiring","Hiring"],["incentive","Incentive"],["settings","Lists"],["external","External"]];
 function Lists({ data, persist }) {
   const add = (key,val) => { if(!val.trim()) return; persist({ ...data, lists:{ ...data.lists, [key]:[...data.lists[key], val.trim()] } }); };
