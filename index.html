@@ -311,6 +311,8 @@ const normalize = (d) => { d.settings = d.settings || { weeklyTarget: 4 }; d.pip
     { label:"Webull Affiliate", url:"" },
     { label:"Moomoo Affiliate", url:"" },
   ];
+  // Payout: migrate any old auto-generated invoices into the new manual payment-records list (once per editor)
+  if (d.payouts) Object.keys(d.payouts).forEach((nm)=>{ const pr=d.payouts[nm]; if(pr && !Array.isArray(pr.records)) pr.records = Array.isArray(pr.invoices) ? pr.invoices.map((iv)=>({ id: iv.id||uid(), date: String(iv.date||"").slice(0,10)||nowISO(), videos: Number(iv.count)||0, amount: Number(iv.amount)||0, invoice:"", invoiceName:"", note: (iv.rate!=null ? ((iv.count||0)+" pcs × RM"+iv.rate) : ""), status:"Pending" })) : []; });
   // one-time: insert the "Ready for Film" stage (between Scripted and Filmed) into existing boards
   if (!d.settings.readyForFilmV1) {
     const ps = d.lists.pipelineStatus.slice();
@@ -1411,33 +1413,35 @@ function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubm
   );
   const panel = (name)=>{
     const rec = POUT[name] || {}; const payee = rec.payee || {};
-    const edited = editedBy(name); const rate = Number(rec.rate)||0; const total = edited.length*rate;
-    const invoices = rec.invoices || [];
+    const edited = editedBy(name);
+    const records = Array.isArray(rec.records) ? rec.records : [];
     const canEdit = isAdmin || (isEditor && name===myName);
     const savePayee = (patch)=> onSave(name, { payee:{ ...payee, ...patch } });
-    const submit = ()=>{
-      if (edited.length===0) { alert("No edited content to invoice yet."); return; }
-      if (!rate) { alert("Set your rate per content first."); return; }
-      if (!payee.company || !payee.bank) { alert("Please fill in at least your company name and bank details before submitting."); return; }
-      onSubmitInvoice(name, { id:uid(), date:nowISO(), count:edited.length, rate, amount:total, titles:edited.map((r)=>r.title).slice(0,50) });
-    };
+    const saveRecords = (l)=> onSave(name, { records:l });
+    const addRecord = ()=> saveRecords([ { id:uid(), date:nowISO(), videos:0, amount:0, invoice:"", invoiceName:"", note:"", status:"Pending" }, ...records ]);
+    const setRec = (id, patch)=> saveRecords(records.map((r)=> r.id===id ? { ...r, ...patch } : r));
+    const delRec = (id)=> saveRecords(records.filter((r)=> r.id!==id));
+    const num = (v)=> Number(String(v).replace(/[^\d.-]/g,""))||0;
+    const uploadInvoice = async (id, f)=>{ if(!f) return; if(f.size>2*1024*1024){ alert("Invoice file is over 2MB — please compress it."); return; } try{ const du=await fileToDataURL(f); setRec(id,{ invoice:du, invoiceName:f.name }); }catch(e){ alert("Sorry, couldn't read that file."); } };
+    const totalInvoiced = records.reduce((s,r)=>s+(Number(r.amount)||0),0);
+    const paidAmt = records.filter((r)=>r.status==="Paid").reduce((s,r)=>s+(Number(r.amount)||0),0);
+    const th2 = { fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", padding:"9px 8px", whiteSpace:"nowrap", background:"#F8F9FC", borderBottom:`1px solid ${C.line}` };
+    const td2 = { padding:"7px 8px", borderTop:`1px solid ${C.line}`, fontSize:12.5, verticalAlign:"middle" };
+    const upInput = (id, label)=> <label style={{ fontSize:11.5, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:7, padding:"5px 10px", display:"inline-block", whiteSpace:"nowrap" }}>{label}<input type="file" accept="application/pdf,image/*" onChange={(e)=>{ const f=e.target.files&&e.target.files[0]; uploadInvoice(id,f); if(e.target) e.target.value=""; }} style={{ display:"none" }} /></label>;
     return (
       <div key={name} style={{ ...card(18), marginBottom:16 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
           <span style={{ width:34, height:34, borderRadius:10, background:C.navy, color:"#fff", display:"grid", placeItems:"center", fontWeight:800, fontSize:14 }}>{(name||"?").slice(0,1)}</span>
           <div style={{ fontSize:16, fontWeight:700 }}>{name}</div>
           <div style={{ flex:1 }} />
-          <div style={{ textAlign:"right" }}><div style={{ fontSize:22, fontWeight:800, color:C.navy }}>RM {fmt(total)}</div><div style={{ fontSize:11, color:C.sub }}>{edited.length} edited × RM {fmt(rate)}</div></div>
+          <div style={{ textAlign:"right" }}><div style={{ fontSize:22, fontWeight:800, color:C.navy }}>RM {fmt(totalInvoiced)}</div><div style={{ fontSize:11, color:C.sub }}>{records.length} record{records.length===1?"":"s"} · RM {fmt(paidAmt)} paid</div></div>
         </div>
         <div style={{ display:"grid", gridTemplateColumns:"1.1fr 1fr", gap:18 }}>
           <div>
-            <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:8 }}>Work &amp; rate</div>
-            <div style={{ display:"flex", gap:12, marginBottom:12, flexWrap:"wrap" }}>
-              <div style={{ flex:1, minWidth:110, background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px" }}><div style={{ fontSize:20, fontWeight:800 }}>{edited.length}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600 }}>Content edited</div></div>
-              <div style={{ flex:1, minWidth:110 }}>{fld("Rate per content (RM)", rate||"", (v)=>onSave(name,{ rate:Number(v)||0 }), "0", !canEdit)}</div>
-            </div>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:8 }}>Content edited (reference)</div>
+            <div style={{ background:"#F8F9FC", border:`1px solid ${C.line}`, borderRadius:10, padding:"10px 12px", marginBottom:10, display:"inline-block", minWidth:130 }}><div style={{ fontSize:20, fontWeight:800 }}>{edited.length}</div><div style={{ fontSize:11, color:C.sub, fontWeight:600 }}>Pieces at Edited+ stage</div></div>
             <div style={{ maxHeight:150, overflowY:"auto", border:`1px solid ${C.line}`, borderRadius:9 }}>
-              {edited.length===0 ? <div style={{ padding:12, fontSize:12, color:C.sub }}>No content marked Edited yet.</div>
+              {edited.length===0 ? <div style={{ padding:12, fontSize:12, color:C.sub }}>No content at Edited stage yet.</div>
                 : edited.map((r)=>(<div key={r._id} style={{ display:"flex", gap:8, alignItems:"center", padding:"7px 10px", borderBottom:`1px solid ${C.line}`, fontSize:12 }}><span style={{ color:"#15724A", fontWeight:800 }}>✓</span><span style={{ flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={r.title}>{r.title||"(untitled)"}</span><span style={{ color:C.sub, fontSize:11 }}>{r.stamps&&r.stamps[ST.EDITED]?isoToDisp(String(r.stamps[ST.EDITED]).slice(0,10)):""}</span></div>))}
             </div>
           </div>
@@ -1452,17 +1456,34 @@ function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubm
             {fld("Bank details", payee.bank, (v)=>savePayee({ bank:v }), "Bank · account name · account no.", !canEdit)}
           </div>
         </div>
-        {canEdit && <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:14, paddingTop:14, borderTop:`1px solid ${C.line}` }}>
-          <button onClick={submit} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:9, padding:"10px 18px", fontSize:13, fontWeight:700, cursor:"pointer" }}>Submit invoice · RM {fmt(total)}</button>
-          <span style={{ fontSize:11.5, color:C.sub }}>Submits the {edited.length} edited piece{edited.length===1?"":"s"} at RM {fmt(rate)} each.</span>
-        </div>}
-        {invoices.length>0 && <div style={{ marginTop:14 }}>
-          <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px", marginBottom:6 }}>Submitted invoices</div>
-          <table style={{ width:"100%", borderCollapse:"collapse" }}>
-            <thead><tr>{["Date","Content","Rate","Amount"].map((h,i)=><th key={h} style={{ textAlign:i>=2?"right":"left", fontSize:10, fontWeight:700, color:C.sub, textTransform:"uppercase", padding:"0 8px 6px" }}>{h}</th>)}</tr></thead>
-            <tbody>{[...invoices].reverse().map((iv)=>(<tr key={iv.id} style={{ borderTop:`1px solid ${C.line}` }}><td style={{ padding:"7px 8px", fontSize:12 }}>{isoToDisp(String(iv.date).slice(0,10))}</td><td style={{ padding:"7px 8px", fontSize:12 }}>{iv.count} piece{iv.count===1?"":"s"}</td><td style={{ padding:"7px 8px", fontSize:12, textAlign:"right" }}>RM {fmt(iv.rate)}</td><td style={{ padding:"7px 8px", fontSize:12.5, fontWeight:700, textAlign:"right" }}>RM {fmt(iv.amount)}</td></tr>))}</tbody>
-          </table>
-        </div>}
+        <div style={{ marginTop:16, paddingTop:14, borderTop:`1px solid ${C.line}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+            <div style={{ fontSize:11.5, fontWeight:700, color:C.sub, textTransform:"uppercase", letterSpacing:".3px" }}>Payment records</div>
+            <div style={{ flex:1 }} />
+            {canEdit && <button onClick={addRecord} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:8, padding:"7px 13px", fontSize:12.5, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}><Plus size={15} />Add record</button>}
+          </div>
+          {records.length===0 ? <Empty>{canEdit ? "No records yet. Click ‘Add record’ to log videos supplied and attach an invoice." : "No payment records yet."}</Empty> : (
+          <div style={{ overflowX:"auto", border:`1px solid ${C.line}`, borderRadius:10 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", minWidth:760 }}>
+              <colgroup><col style={{ width:118 }} /><col style={{ width:84 }} /><col style={{ width:120 }} /><col style={{ width:150 }} /><col /><col style={{ width:112 }} /><col style={{ width:40 }} /></colgroup>
+              <thead><tr>{["Date","Videos","Amount (RM)","Invoice","Notes","Status",""].map((h,i)=><th key={h+i} style={{ ...th2, textAlign:(i===1||i===2)?"right":"left" }}>{h}</th>)}</tr></thead>
+              <tbody>
+                {records.map((r)=>(
+                  <tr key={r.id}>
+                    <td style={td2}>{canEdit ? <DateCell value={r.date?String(r.date).slice(0,10):""} onCommit={(v)=>setRec(r.id,{date:v})} /> : (r.date?isoToDisp(String(r.date).slice(0,10)):"—")}</td>
+                    <td style={{ ...td2, textAlign:"right" }}>{canEdit ? <NumCell value={r.videos} onCommit={(v)=>setRec(r.id,{videos:num(v)})} placeholder="0" style={{ textAlign:"right", width:64 }} /> : fmt(r.videos)}</td>
+                    <td style={{ ...td2, textAlign:"right" }}>{canEdit ? <NumCell value={r.amount} onCommit={(v)=>setRec(r.id,{amount:num(v)})} placeholder="0" style={{ textAlign:"right" }} /> : fmt(r.amount)}</td>
+                    <td style={td2}>{r.invoice ? <span style={{ display:"inline-flex", gap:7, alignItems:"center", flexWrap:"wrap" }}><button onClick={()=>openDataUrl(r.invoice)} style={{ border:`1px solid ${BLUE.accent}`, background:"#fff", color:BLUE.accent, borderRadius:7, padding:"4px 9px", fontSize:11.5, fontWeight:700, cursor:"pointer" }}>View</button>{canEdit && upInput(r.id,"Replace")}</span> : (canEdit ? upInput(r.id,"Upload") : <span style={{ color:"#C7CFDD" }}>—</span>)}</td>
+                    <td style={td2}>{canEdit ? <InlineText value={r.note} onCommit={(v)=>setRec(r.id,{note:v})} placeholder="note…" style={{ width:"100%", border:`1px solid ${C.line}`, borderRadius:7, padding:"6px 8px", fontSize:12, fontFamily:"inherit", boxSizing:"border-box" }} /> : (r.note||"—")}</td>
+                    <td style={td2}>{isAdmin ? <HoverSelect value={r.status||"Pending"} options={["Pending","Paid"]} onChange={(v)=>setRec(r.id,{status:v})} style={{ background:(r.status==="Paid")?"#DCF0E4":"#FCE9D6", color:(r.status==="Paid")?"#15724A":"#8a5a1a", fontWeight:700, borderRadius:6, padding:"4px 8px" }} /> : <span style={{ background:(r.status==="Paid")?"#DCF0E4":"#FCE9D6", color:(r.status==="Paid")?"#15724A":"#8a5a1a", fontWeight:700, fontSize:11, padding:"3px 9px", borderRadius:6, whiteSpace:"nowrap" }}>{r.status||"Pending"}</span>}</td>
+                    <td style={{ ...td2, textAlign:"center" }}>{canEdit ? <IconBtn title="Delete record" danger onClick={()=>delRec(r.id)}><Trash2 size={12} /></IconBtn> : null}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          )}
+        </div>
       </div>
     );
   };
@@ -1470,7 +1491,7 @@ function Payout({ rows, payouts, isAdmin, isEditor, myName, team, onSave, onSubm
     <div>
       <div style={{ marginBottom:16 }}>
         <div style={{ fontSize:18, fontWeight:800, color:C.ink }}>Payout</div>
-        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{isAdmin ? "Editor payouts — content edited, rate, and submitted invoices." : "Log your edited content, rate and payee details, then submit an invoice."}</div>
+        <div style={{ fontSize:12.5, color:C.sub, marginTop:2 }}>{isAdmin ? "Editor payment records — videos supplied, amount invoiced, uploaded invoices, and paid status." : "Log each payment: videos supplied, amount invoiced, and upload your invoice. Admin marks it Paid."}</div>
       </div>
       {names.length===0 || (!isAdmin && !isEditor)
         ? <div style={{ ...card(16), fontSize:13, color:C.sub }}>{(!isAdmin && !isEditor) ? "This tab is for editors. If you edit content, ask an admin to set your role to Editor." : "No editor payouts yet."}</div>
