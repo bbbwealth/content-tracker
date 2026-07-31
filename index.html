@@ -651,7 +651,19 @@ function App() {
   // External tab is a page of admin-managed third-party links (label → URL)
   const saveExternalLinks = (links) => persist({ ...data, settings:{ ...data.settings, externalLinks:links } });
   // keep the Team/Owner list (source of the Owner/Writer/Editor dropdowns) in sync with actual members
-  const addTeamNames = (names) => { const cur = data.lists.team || []; const add = (names||[]).filter((n)=>n && !cur.includes(n)); if (add.length) persist({ ...data, lists:{ ...data.lists, team:[ ...cur, ...add ] } }); };
+  // keep the managed lists (Team, Editors, Writers) in sync with enrolled members and their roles
+  const syncMemberLists = (members) => {
+    const arr = members || [];
+    const edEmails = (data.editors||[]).map((e)=>String(e||"").toLowerCase());
+    const isEd = (u)=> u.role==="editor" || (Array.isArray(u.contentRoles) && u.contentRoles.includes("Editor")) || edEmails.includes(String(u.email||"").toLowerCase());
+    const isWr = (u)=> Array.isArray(u.contentRoles) && u.contentRoles.includes("Writer");
+    let next = data, changed = false;
+    const addTo = (key, names) => { const cur = next.lists[key] || []; const add = names.filter((n)=>n && !cur.includes(n)); if (add.length) { next = { ...next, lists:{ ...next.lists, [key]:[ ...cur, ...add ] } }; changed = true; } };
+    addTo("team", arr.map((u)=>u.name).filter(Boolean));
+    addTo("editors", arr.filter(isEd).map((u)=>u.name).filter(Boolean));
+    addTo("writers", arr.filter(isWr).map((u)=>u.name).filter(Boolean));
+    if (changed) persist(next);
+  };
   const setWeeklyStatus = (_id, status) => persist({ ...data, weeklyPlans: data.weeklyPlans.map((r)=>(r._id===_id ? stampContent({ ...r, status }) : r)) });
   const NAV = [
     { id:"pipeline", label:"Content", icon:Columns }, { id:"calendar", label:"Calendar", icon:CalendarDays }, { id:"insight", label:"Insight", icon:TrendingUp }, { id:"analytics", label:"Analytics", icon:TrendingUp },
@@ -718,7 +730,7 @@ function App() {
           {safeTab==="payout" && !(isEditor && !isPartTime) && <Payout rows={data.pipeline} payouts={data.payouts} isAdmin={isAdmin} isEditor={isEditor} myName={myName} team={L.team} onSave={savePayout} onSubmitInvoice={submitInvoice} />}
           {safeTab==="settings" && <Lists data={data} persist={persist} />}
           {safeTab==="external" && <ExternalLinks links={(data.settings&&data.settings.externalLinks)||[]} isAdmin={isAdmin} onSave={saveExternalLinks} />}
-          {safeTab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} onSyncTeam={addTeamNames} />}
+          {safeTab==="admin" && isAdmin && <AdminPanel data={data} onEnrol={enrolUser} myEmail={currentUser.email} onListUsers={listMembers} onRemoveUser={removeMember} onUpdateUser={updateMember} onSyncMembers={syncMemberLists} />}
         </div>
       </main>
 
@@ -3536,7 +3548,7 @@ function Productivity({ rows, team }) {
 }
 
 /* ── admin panel: enrol team members (calls the secure Edge Function) ── */
-function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdateUser, onSyncTeam }) {
+function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdateUser, onSyncMembers }) {
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [pw,setPw]=useState(""); const [role,setRole]=useState("user");
   const [tabs,setTabs]=useState(MEMBER_TABS.map((t)=>t[0]));
   const [busy,setBusy]=useState(false); const [msg,setMsg]=useState(null);
@@ -3549,7 +3561,7 @@ function AdminPanel({ data, onEnrol, myEmail, onListUsers, onRemoveUser, onUpdat
   const isAppEditor = (u)=> u.role==="editor" || appEditors.includes(String(u.email||"").toLowerCase());
   const lbl = { fontSize:11.5, fontWeight:700, color:C.sub, display:"block", marginBottom:5 };
   const roleChip = (label, on, onClick) => <button type="button" key={label} onClick={onClick} style={{ border:`1.5px solid ${on?C.navy:C.line}`, background:on?"#F3F6FC":"#fff", color:on?C.navy:C.sub, borderRadius:8, padding:"5px 9px", fontSize:11.5, fontWeight:600, cursor:"pointer" }}>{on?"✓ ":""}{label}</button>;
-  const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>{ const us=r.users||[]; setMembers(us); onSyncTeam && onSyncTeam(us.map((u)=>u.name).filter(Boolean)); }).catch((e)=>setMErr(String((e&&e.message)||e))); };
+  const load = ()=>{ if(!onListUsers) return; setMErr(""); onListUsers().then((r)=>{ const us=r.users||[]; setMembers(us); onSyncMembers && onSyncMembers(us); }).catch((e)=>setMErr(String((e&&e.message)||e))); };
   useEffect(()=>{ load(); }, []);
   const toggleTab=(id)=>setTabs((s)=>s.includes(id)?s.filter((x)=>x!==id):[...s,id]);
   const submit = async (e)=>{ e.preventDefault(); setBusy(true); setMsg(null);
