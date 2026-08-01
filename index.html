@@ -202,6 +202,13 @@ const SEED = {
 };
 const PIPE_COLS = ["Approved","Scripting","Design","Review","Scheduled","Posted"];
 const KEY = "bbb-content-os-v1";
+// ── local safety backup: mirror last-known-good data into this browser so a DB wipe is always recoverable ──
+const BACKUP_KEY = "bbb-content-backup-v1";
+const pipeLen = (d) => (d && Array.isArray(d.pipeline) ? d.pipeline.length : 0);
+const readLocalBackup = () => { try { const raw = localStorage.getItem(BACKUP_KEY); if (!raw) return null; const j = JSON.parse(raw); return (j && j.data && Array.isArray(j.data.pipeline)) ? j : null; } catch (e) { return null; } };
+const saveLocalBackup = (d) => { try { localStorage.setItem(BACKUP_KEY, JSON.stringify({ at: Date.now(), data: d })); } catch (e) {} };
+// only overwrite the backup if the new data isn't a drastic shrink of what we already have (guards against saving a wiped/seed state over a good backup)
+const maybeBackup = (d) => { const bk = readLocalBackup(); const bkc = bk ? pipeLen(bk.data) : 0; if (bkc >= 20 && pipeLen(d) < bkc / 2) return; saveLocalBackup(d); };
 
 /* ── atoms ── */
 const Pill = ({ children, bg, fg, style }) => (<span style={{ background:bg, color:fg, padding:"3px 9px", borderRadius:999, fontSize:11, fontWeight:700, whiteSpace:"nowrap", letterSpacing:".2px", ...style }}>{children}</span>);
@@ -424,6 +431,8 @@ function App() {
   const [modal, setModal] = useState(null);
   const [drag, setDrag] = useState(null);
   const [saved, setSaved] = useState("");
+  const [loadErr, setLoadErr] = useState("");
+  const [restoreOffer, setRestoreOffer] = useState(null);
   const savedTimer = useRef();
   const lastPush = useRef("");
   const undoRef = useRef([]); // grid undo history — must sit with the other hooks, above the early returns
@@ -441,15 +450,30 @@ function App() {
     if (!SB_READY || !session) { setData(null); return; }
     let channel; let cancelled = false;
     (async () => {
-      const { data: row } = await sb.from("app_state").select("data").eq("id", ROW_ID).maybeSingle();
+      const { data: row, error } = await sb.from("app_state").select("data").eq("id", ROW_ID).maybeSingle();
       if (cancelled) return;
+      if (error) {
+        // READ FAILED (expired token / network / RLS). Do NOT treat this as an empty database and NEVER
+        // seed-overwrite existing data — that would wipe the team's real content. Surface an error instead.
+        setLoadErr(error.message || "Couldn't load your data. Please refresh and try again.");
+        return;
+      }
       if (row && row.data) {
-        setData(normalize(row.data));
+        const loaded = normalize(row.data);
+        const bk = readLocalBackup();
+        if (bk && pipeLen(bk.data) >= 20 && pipeLen(loaded) < pipeLen(bk.data) / 2) {
+          // DB has far fewer pieces than this browser's backup — likely a reset/wipe. Offer to restore; keep the backup intact.
+          setRestoreOffer({ at: bk.at, count: pipeLen(bk.data), data: bk.data });
+        } else {
+          maybeBackup(loaded); // keep last-known-good copy in this browser
+        }
+        setData(loaded);
       } else {
-        // first ever load — seed the shared document (normalized, so it gets the merged shape too)
+        // genuinely empty (first-ever use only) — seed the shared document
         const seeded = normalize(JSON.parse(JSON.stringify(SEED)));
         lastPush.current = JSON.stringify(seeded);
-        await sb.from("app_state").upsert({ id: ROW_ID, data: seeded });
+        const { error: upErr } = await sb.from("app_state").upsert({ id: ROW_ID, data: seeded }, { onConflict: "id" });
+        if (upErr) { setLoadErr("Couldn't initialize the workspace. Please refresh."); return; }
         setData(seeded);
       }
       channel = sb
@@ -475,6 +499,7 @@ function App() {
     const { error } = await sb
       .from("app_state")
       .upsert({ id: ROW_ID, data: next, updated_at: new Date().toISOString() });
+    if (!error) maybeBackup(next); // keep this browser's safety backup current
     setSaved(error ? "Save failed — check connection" : "Saved");
     savedTimer.current = setTimeout(() => setSaved(""), 1600);
   };
@@ -484,6 +509,7 @@ function App() {
   if (!SB_READY) return <ConfigNeeded />;
   if (session === undefined) return <Splash />;
   if (!session) return <Login />;
+  if (loadErr) return (<div style={{ minHeight:"100vh", background:C.canvas, display:"grid", placeItems:"center", padding:24 }}><div style={{ ...card(24), maxWidth:420, textAlign:"center" }}><div style={{ fontSize:16, fontWeight:800, color:C.ink, marginBottom:8 }}>Couldn't load your data</div><div style={{ fontSize:13, color:C.sub, marginBottom:16, lineHeight:1.5 }}>There was a problem reaching the database, so nothing was changed. Your data is safe — please refresh to try again.</div><button onClick={()=>window.location.reload()} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:10, padding:"10px 18px", fontSize:13.5, fontWeight:700, cursor:"pointer" }}>Refresh</button></div></div>);
   if (!data) return <Splash />;
   const currentUser = session.user || {};
   const role = (currentUser.app_metadata && currentUser.app_metadata.role) || "user";
@@ -683,6 +709,13 @@ function App() {
 
   return (
     <div style={{ minHeight:"100vh", background:C.canvas, color:C.ink }}>
+      {restoreOffer && <div style={{ background:"#FDECEC", borderBottom:"1px solid #F3C9C9", padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+        <span style={{ fontSize:13, color:"#8A1B1B", fontWeight:800 }}>⚠ The database looks reset to demo data.</span>
+        <span style={{ fontSize:12.5, color:"#8A1B1B" }}>This browser has a backup from {new Date(restoreOffer.at).toLocaleString()} with <b>{restoreOffer.count}</b> pieces.</span>
+        <div style={{ flex:1 }} />
+        {isAdmin ? <button onClick={()=>{ if(window.confirm(`Restore ${restoreOffer.count} pieces from this browser's backup? This replaces the current data for everyone.`)){ persist(restoreOffer.data); setRestoreOffer(null); } }} style={{ border:"none", background:"#B42318", color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Restore backup</button> : <span style={{ fontSize:12, color:"#8A1B1B" }}>Ask an admin to restore.</span>}
+        <button onClick={()=>setRestoreOffer(null)} style={{ border:"1px solid #E4B4B4", background:"#fff", color:"#8A1B1B", borderRadius:8, padding:"8px 12px", fontSize:12.5, fontWeight:600, cursor:"pointer" }}>Dismiss</button>
+      </div>}
       <div style={{ background:C.navy, position:"sticky", top:0, zIndex:30 }}>
         <div style={{ display:"flex", alignItems:"center", gap:11, padding:"10px 20px", borderBottom:"1px solid #243653" }}>
           <div style={{ width:32, height:32, borderRadius:9, background:C.yellow, color:C.navy, fontWeight:800, fontSize:12, display:"grid", placeItems:"center", letterSpacing:"-.5px", flexShrink:0 }}>BBB</div>
@@ -3270,10 +3303,20 @@ function Lists({ data, persist }) {
   const setPhone = (name, phone) => persist({ ...data, memberPhones:{ ...(data.memberPhones||{}), [name]: phone } });
   const setSOP = (patch) => persist({ ...data, settings:{ ...(data.settings||{}), editorSOP:{ ...((data.settings||{}).editorSOP||{}), ...patch } } });
   const setEditorFolder = (name, url) => persist({ ...data, editorFolders:{ ...(data.editorFolders||{}), [name]: String(url||"").trim() } });
+  const exportBackup = () => { try { const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="content-hub-backup-"+new Date().toISOString().slice(0,10)+".json"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),1500); } catch(e){ alert("Export failed."); } };
+  const importBackup = async (e) => { const f=e.target.files&&e.target.files[0]; if(!f) return; try { const txt=await f.text(); const j=JSON.parse(txt); const d=(j&&j.data&&Array.isArray(j.data.pipeline))?j.data:((j&&Array.isArray(j.pipeline))?j:null); if(!d){ alert("That doesn't look like a Content Hub backup file."); if(e.target)e.target.value=""; return; } if(!window.confirm("Restore this backup? It has "+d.pipeline.length+" content pieces and will REPLACE all current data for everyone.")){ if(e.target)e.target.value=""; return; } persist(d); alert("Backup restored — "+d.pipeline.length+" pieces."); } catch(err){ alert("Couldn't read that backup file."); } if(e.target) e.target.value=""; };
   const uploadSOP = async (e) => { const f=e.target.files&&e.target.files[0]; if(!f) return; if(f.size>2*1024*1024){ alert("SOP file is over 2MB — compress it or paste a link instead."); if(e.target) e.target.value=""; return; } try{ const du=await fileToDataURL(f); setSOP({ file:du, fileName:f.name, link:"" }); }catch(err){ alert("Sorry, couldn't read that file."); } if(e.target) e.target.value=""; };
   const sop = (data.settings&&data.settings.editorSOP)||{}; const sopHas = sop.file||sop.link;
   return (
     <div>
+      <div style={{ ...card(16), marginBottom:14, border:`1px solid #E4B4B4` }}>
+        <SectionTitle icon={FileText}>Backup &amp; restore</SectionTitle>
+        <div style={{ fontSize:11.5, color:C.sub, margin:"6px 0 12px" }}>The app now keeps an automatic backup in your browser. Download a copy to keep off-app, and restore from a file if ever needed. <b>Restoring replaces all data for everyone</b> — use with care.</div>
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <button onClick={exportBackup} style={{ border:"none", background:C.navy, color:"#fff", borderRadius:8, padding:"8px 14px", fontSize:12.5, fontWeight:700, cursor:"pointer" }}>Download backup (.json)</button>
+          <label style={{ fontSize:12.5, fontWeight:600, color:C.navy, cursor:"pointer", border:`1px solid ${C.line}`, borderRadius:8, padding:"8px 12px" }}>Restore from file…<input type="file" accept="application/json,.json" onChange={importBackup} style={{ display:"none" }} /></label>
+        </div>
+      </div>
       <div style={{ ...card(16), marginBottom:14 }}>
         <SectionTitle icon={FileText}>Video editing SOP</SectionTitle>
         <div style={{ fontSize:11.5, color:C.sub, margin:"6px 0 12px" }}>Upload the editing SOP (PDF/image, ≤2MB) or paste a link. Editors see an <b>Open SOP</b> button at the top of their edit queue.</div>
