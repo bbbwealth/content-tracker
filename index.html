@@ -2753,7 +2753,6 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
         <HoverSelect value={fType} options={dealTypes} allLabel="All types" allValue="" onChange={setFType} style={selSty} />
         <HoverSelect value={fContent} options={L.collabStatus||[]} allLabel="Any content" allValue="" onChange={setFContent} style={selSty} />
         <HoverSelect value={fPay} options={L.collabPayStatus||[]} allLabel="Any payment" allValue="" onChange={setFPay} style={selSty} />
-        <HoverSelect value={fPic} options={L.collabPic||[]} allLabel="Any PIC" allValue="" onChange={setFPic} style={selSty} />
         <HoverSelect value={fDcu} options={["Yes","No"]} allLabel="DCU: any" allValue="" onChange={setFDcu} style={selSty} />
         <HoverSelect value={fAffil} options={["Yes","No"]} allLabel="Affiliate: any" allValue="" onChange={setFAffil} style={selSty} />
         {(anyFilter||sortKey) && <button onClick={clearAll} style={{ border:"none", background:"transparent", color:BLUE.accent, fontSize:12, fontWeight:700, cursor:"pointer", textDecoration:"underline" }}>clear</button>}
@@ -2761,23 +2760,25 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
       ); })()}
       <div style={{ ...card(0), overflow:"visible" }}>
         <div style={{ overflowX:"auto", overflowY:"visible" }}>
-          <table className="xl" style={{ width:"100%", minWidth:1824 }}>
+          <table className="xl" style={{ width:"100%", minWidth:1536 }}>
             <colgroup>
-              <col style={{ width:150 }} /><col style={{ width:100 }} /><col style={{ width:118 }} /><col style={{ width:180 }} /><col style={{ width:150 }} /><col style={{ width:148 }} /><col style={{ width:60 }} /><col style={{ width:64 }} /><col style={{ width:88 }} />
-              <col style={{ width:126 }} /><col style={{ width:126 }} /><col style={{ width:104 }} /><col style={{ width:98 }} /><col style={{ width:98 }} /><col style={{ width:86 }} /><col style={{ width:78 }} /><col style={{ width:40 }} />
+              <col style={{ width:104 }} /><col style={{ width:150 }} /><col style={{ width:100 }} /><col style={{ width:118 }} /><col style={{ width:180 }} /><col style={{ width:150 }} /><col style={{ width:148 }} /><col style={{ width:60 }} /><col style={{ width:64 }} /><col style={{ width:88 }} />
+              <col style={{ width:126 }} /><col style={{ width:126 }} /><col style={{ width:78 }} /><col style={{ width:40 }} />
             </colgroup>
             <thead><tr style={{ background:BLUE.head }}>
-              {[["Partner / Client","partner"],["Brand","brand"],["Deal type","dealType"],["Project description","desc"],["Scope","scope"],["Delivered / target","delivered"],["DCU","dcu"],["Affiliate","affiliate"],["Rate (RM)","fee"],["Content status","status"],["Payment status","payStatus"],["Added","dateAdded"],["Start","start"],["End","end"],["PIC","pic"]].map(([label,key])=><th key={key} style={{ ...th, cursor:"pointer", userSelect:"none" }} onClick={()=>toggleSort(key)}>{label}{sortArrow(key)}</th>)}
+              {[["Added","dateAdded"],["Partner / Client","partner"],["Brand","brand"],["Deal type","dealType"],["Project description","desc"],["Scope","scope"],["Delivered / target","delivered"],["DCU","dcu"],["Affiliate","affiliate"],["Rate (RM)","fee"],["Content status","status"],["Payment status","payStatus"]].map(([label,key])=><th key={key} style={{ ...th, cursor:"pointer", userSelect:"none" }} onClick={()=>toggleSort(key)}>{label}{sortArrow(key)}</th>)}
               <th style={{ ...th, textAlign:"center" }}>Actions</th>
               <th style={{ ...th, borderRight:"none" }}></th>
             </tr></thead>
             <tbody>
               <tr className="addrow" style={{ background:"#FCFDFF" }}>
+                <td />
                 <td><input value={newPartner} onChange={(e)=>setNewPartner(e.target.value)} onKeyDown={(e)=>{ if(e.key==="Enter"){ e.preventDefault(); commitNew(); } }} onBlur={commitNew} placeholder="+ New deal — partner name, press Enter…" /></td>
-                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
+                <td /><td /><td /><td /><td /><td /><td /><td /><td /><td /><td style={{ borderRight:"none" }} />
               </tr>
               {list.map((r)=>(
                 <tr key={r._id} style={{ background:"#fff" }}>
+                  <td><DateCell value={r.dateAdded} onCommit={(v)=>onPatch(r._id,{dateAdded:v})} /></td>
                   <td><InlineText value={r.partner} onCommit={(v)=>onPatch(r._id,{partner:v})} placeholder="partner…" /></td>
                   <td><HoverSelect value={r.brand||""} options={brands} onChange={(v)=>onPatch(r._id,{brand:v})} placeholder="brand" /></td>
                   <td><HoverSelect value={r.dealType||"Campaign"} options={dealTypes} onChange={(v)=>onPatch(r._id,{dealType:v})} placeholder="type" style={{ background:DT_TINT[r.dealType||"Campaign"]||"transparent", color:C.ink, fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
@@ -2793,10 +2794,6 @@ function Collabs({ rows, lists, isAdmin, onPatch, onQuickAdd, onDel, decks, onSa
                   <td><NumCell value={r.fee} onCommit={(v)=>onPatch(r._id,{fee:v})} placeholder="0" style={{ textAlign:"right" }} /></td>
                   <td><HoverSelect value={r.status||""} options={L.collabStatus||[]} onChange={(v)=>onPatch(r._id,{status:v})} placeholder="status" style={{ background:STATUS_TINT[r.status]||"transparent", color:statusInk(r.status), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
                   <td><HoverSelect value={r.payStatus||""} options={L.collabPayStatus||[]} onChange={(v)=>onPatch(r._id,{payStatus:v})} placeholder="payment" style={{ background:STATUS_TINT[r.payStatus]||"transparent", color:statusInk(r.payStatus), fontWeight:700, borderRadius:6, margin:"3px", padding:"4px 6px" }} /></td>
-                  <td><DateCell value={r.dateAdded} onCommit={(v)=>onPatch(r._id,{dateAdded:v})} /></td>
-                  <td><DateCell value={r.start} onCommit={(v)=>onPatch(r._id,{start:v})} /></td>
-                  <td><DateCell value={r.end} onCommit={(v)=>onPatch(r._id,{end:v})} /></td>
-                  <td><HoverSelect value={r.pic||""} options={L.collabPic||[]} onChange={(v)=>onPatch(r._id,{pic:v})} placeholder="PIC" /></td>
                   <td style={{ textAlign:"center", whiteSpace:"nowrap" }}>
                     <IconBtn title="Send info" onClick={()=>setShareDeal(r)}><Share2 size={13} /></IconBtn>
                     <IconBtn title="Issue invoice" onClick={()=>setInvoiceDeal(r)}><FileText size={13} /></IconBtn>
